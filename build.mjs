@@ -31,7 +31,7 @@ export default {
     if (url.pathname === "/public/og.png" && env.ASSETS) return env.ASSETS.fetch(request);
     const file = files[url.pathname];
     if (!file) return new Response("Not found", { status: 404 });
-    return new Response(file.body, { headers: { "content-type": file.type, "cache-control": url.pathname === "/" ? "no-cache" : "public, max-age=3600", "x-content-type-options": "nosniff", "referrer-policy": "strict-origin-when-cross-origin" } });
+    return new Response(file.body, { headers: { "content-type": file.type, "cache-control": url.pathname === "/" || url.pathname.startsWith("/portal.") ? "no-cache" : "public, max-age=3600", "x-content-type-options": "nosniff", "referrer-policy": "strict-origin-when-cross-origin" } });
   }
 };`;
 
