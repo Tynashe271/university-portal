@@ -6,14 +6,18 @@ await mkdir("dist/static", { recursive: true });
 await mkdir("dist/static/public", { recursive: true });
 await mkdir("dist/.openai", { recursive: true });
 
-const html = await readFile("index.html", "utf8");
 const css = await readFile("styles.css", "utf8");
 const js = await readFile("app.js", "utf8");
+const pages = ["index.html", "about.html", "academics.html", "student-life.html", "admissions.html", "news.html", "contact.html"];
+const pageFiles = Object.fromEntries(await Promise.all(pages.map(async name => [name, await readFile(name, "utf8")])));
+const routes = Object.fromEntries(Object.entries(pageFiles).flatMap(([name, body]) => {
+  const route = name === "index.html" ? "/" : `/${name}`;
+  return [[route, { body, type: "text/html; charset=utf-8" }], [`/${name}`, { body, type: "text/html; charset=utf-8" }]];
+}));
 
 const worker = `
 const files = {
-  "/": { body: ${JSON.stringify(html)}, type: "text/html; charset=utf-8" },
-  "/index.html": { body: ${JSON.stringify(html)}, type: "text/html; charset=utf-8" },
+  ...${JSON.stringify(routes)},
   "/styles.css": { body: ${JSON.stringify(css)}, type: "text/css; charset=utf-8" },
   "/app.js": { body: ${JSON.stringify(js)}, type: "text/javascript; charset=utf-8" }
 };
@@ -30,4 +34,4 @@ export default {
 await writeFile("dist/server/index.js", worker);
 await copyFile("public/og.png", "dist/static/public/og.png");
 await copyFile(".openai/hosting.json", "dist/.openai/hosting.json");
-console.log("Built Chongogwe High School site.");
+console.log("Built Anyschool High School site.");
