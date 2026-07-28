@@ -8,7 +8,9 @@ await mkdir("dist/.openai", { recursive: true });
 
 const css = await readFile("styles.css", "utf8");
 const js = await readFile("app.js", "utf8");
-const pages = ["index.html", "about.html", "academics.html", "student-life.html", "admissions.html", "news.html", "contact.html"];
+const portalCss = await readFile("portal.css", "utf8");
+const portalJs = await readFile("portal.js", "utf8");
+const pages = ["index.html", "about.html", "academics.html", "student-life.html", "admissions.html", "news.html", "contact.html", "application.html", "student-portal.html"];
 const pageFiles = Object.fromEntries(await Promise.all(pages.map(async name => [name, await readFile(name, "utf8")])));
 const routes = Object.fromEntries(Object.entries(pageFiles).flatMap(([name, body]) => {
   const route = name === "index.html" ? "/" : `/${name}`;
@@ -19,7 +21,9 @@ const worker = `
 const files = {
   ...${JSON.stringify(routes)},
   "/styles.css": { body: ${JSON.stringify(css)}, type: "text/css; charset=utf-8" },
-  "/app.js": { body: ${JSON.stringify(js)}, type: "text/javascript; charset=utf-8" }
+  "/app.js": { body: ${JSON.stringify(js)}, type: "text/javascript; charset=utf-8" },
+  "/portal.css": { body: ${JSON.stringify(portalCss)}, type: "text/css; charset=utf-8" },
+  "/portal.js": { body: ${JSON.stringify(portalJs)}, type: "text/javascript; charset=utf-8" }
 };
 export default {
   async fetch(request, env) {
