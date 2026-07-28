@@ -10,7 +10,7 @@ const css = await readFile("styles.css", "utf8");
 const js = await readFile("app.js", "utf8");
 const portalCss = await readFile("portal.css", "utf8");
 const portalJs = await readFile("portal.js", "utf8");
-const pages = ["index.html", "about.html", "academics.html", "student-life.html", "admissions.html", "news.html", "contact.html", "application.html", "student-portal.html"];
+const pages = ["index.html", "about.html", "academics.html", "student-life.html", "admissions.html", "news.html", "contact.html", "application.html", "student-portal.html", "admissions-admin.html"];
 const pageFiles = Object.fromEntries(await Promise.all(pages.map(async name => [name, await readFile(name, "utf8")])));
 const routes = Object.fromEntries(Object.entries(pageFiles).flatMap(([name, body]) => {
   const route = name === "index.html" ? "/" : `/${name}`;
