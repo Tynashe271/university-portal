@@ -61,6 +61,12 @@ class AdmissionApplication(models.Model):
     # have a dedicated column (nationality, boarding preference, special
     # needs, relationship to guardian, payment reference, etc.)
     additional_notes = models.TextField(blank=True)
+
+    # Portal password the applicant sets on the application form, issued
+    # alongside the application_number so they can sign back in to check
+    # their status. Stored hashed (see AdmissionApplicationSerializer),
+    # never returned by the API.
+    portal_password = models.CharField(max_length=128, blank=True)
     
     # Application Status
     status = models.CharField(max_length=20, choices=APPLICATION_STATUS, default='draft')

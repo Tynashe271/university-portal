@@ -48,6 +48,7 @@ if(appForm){
     e.preventDefault();
     if(!appForm.reportValidity())return;
     const d=Object.fromEntries(new FormData(appForm));
+    if(d.portalPassword!==d.confirmPassword){alert("The portal passwords do not match.");return}
     const notes=[
       d.idNumber&&`Birth certificate/ID number: ${d.idNumber}`,
       d.nationality&&`Nationality: ${d.nationality}`,
@@ -73,6 +74,7 @@ if(appForm){
       previous_grade:d.previousLevel||"",
       status:"submitted",
       additional_notes:notes,
+      portal_password:d.portalPassword,
     };
     const submitBtn=q("#submit-application");
     submitBtn.disabled=true;
@@ -298,23 +300,22 @@ q("#applicant-login-form")?.addEventListener("submit",async e=>{
   e.preventDefault();
   const d=new FormData(e.currentTarget);
   const ref=String(d.get("reference")).trim().toUpperCase();
-  const email=String(d.get("password")).trim().toLowerCase();
+  const password=String(d.get("password"));
   q("#applicant-error").textContent="";
   try{
-    const app=await api(`/admissions/applications/${encodeURIComponent(ref)}/`);
-    if((app.parent_email||"").toLowerCase()!==email){q("#applicant-error").textContent="Application reference or email is incorrect.";return}
-    sessionStorage.setItem("active-applicant",ref);
+    const app=await api(`/admissions/applications/${encodeURIComponent(ref)}/login/`,{method:"POST",body:{password}});
+    sessionStorage.setItem("active-applicant",JSON.stringify(app));
     q("#applicant-login").hidden=true;q("#applicant-dashboard").hidden=false;
     renderApplicant(app);
-  }catch{
-    q("#applicant-error").textContent="Application reference or email is incorrect.";
+  }catch(err){
+    q("#applicant-error").textContent=err.message||"Application reference or password is incorrect.";
   }
 });
-if(q("#applicant-dashboard")&&sessionStorage.getItem("active-applicant")){
-  const ref=sessionStorage.getItem("active-applicant");
-  api(`/admissions/applications/${encodeURIComponent(ref)}/`).then(app=>{
+if(q("#applicant-dashboard")){
+  let cached=null;try{cached=JSON.parse(sessionStorage.getItem("active-applicant"))}catch{}
+  if(cached){
     q("#applicant-login").hidden=true;q("#applicant-dashboard").hidden=false;
-    renderApplicant(app);
-  }).catch(()=>sessionStorage.removeItem("active-applicant"));
+    renderApplicant(cached);
+  }
 }
 q("#applicant-logout")?.addEventListener("click",()=>{sessionStorage.removeItem("active-applicant");location.reload()});
