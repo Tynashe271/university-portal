@@ -287,11 +287,12 @@ if(adminLogin)adminLogin.onsubmit=async e=>{
     sessionStorage.setItem(adminSessionStorageKey,JSON.stringify({token:data.token,user:data.user}));
     q("#admin-login").hidden=true;adminDash.hidden=false;
     loadAdmin();
+    loadAdminOverview();
   }catch(err){
     q("#admin-error").textContent=err.message;
   }
 };
-if(adminDash&&getAdminSession()){q("#admin-login").hidden=true;adminDash.hidden=false;loadAdmin()}
+if(adminDash&&getAdminSession()){q("#admin-login").hidden=true;adminDash.hidden=false;loadAdmin();loadAdminOverview()}
 
 async function loadAdmin(){
   const target=q("#admin-applications");if(!target)return;
@@ -306,6 +307,46 @@ async function loadAdmin(){
   }
   loadAdminNews();
   loadAdminStaff();
+}
+
+/* ---------- Admin dashboard overview (dashboard-admin.html) ---------- */
+async function loadAdminOverview(){
+  const target=q("#overview-kpis");if(!target)return;
+  const session=getAdminSession();if(!session)return;
+  try{
+    const [courseStats,appsRes,staffRes,newsRes]=await Promise.all([
+      api("/courses/dashboard/admin/",{token:session.token}).catch(()=>null),
+      api("/admissions/applications/?page_size=200",{token:session.token}).catch(()=>({results:[],count:0})),
+      api("/staff/staff-profiles/?page_size=500",{token:session.token}).catch(()=>({results:[]})),
+      api("/news/posts/?page_size=100",{token:session.token}).catch(()=>({results:[]})),
+    ]);
+    const applications=appsRes.results||appsRes||[];
+    const staffList=staffRes.results||staffRes||[];
+    const posts=newsRes.results||newsRes||[];
+    const totalApplications=appsRes.count??applications.length;
+    const pending=applications.filter(a=>["submitted","under_review"].includes(a.status)).length;
+    const accepted=applications.filter(a=>["approved","admitted","enrolled"].includes(a.status)).length;
+    const permanentTeachers=staffList.filter(s=>s.employee_type==="permanent_teacher").length;
+
+    target.innerHTML=`
+      <article><span class="stat-icon blue">${courseStats?"✓":"–"}</span><small>Total students</small><strong>${courseStats?.total_students??"–"}</strong><em>Enrolled accounts</em></article>
+      <article><span class="stat-icon purple">${staffList.length}</span><small>Teachers & staff</small><strong>${staffList.length}</strong><em>${permanentTeachers} permanent teacher${permanentTeachers===1?"":"s"}</em></article>
+      <article><span class="stat-icon orange">${pending}</span><small>Applications under review</small><strong>${pending}</strong><em>${totalApplications} total this year</em></article>
+      <article><span class="stat-icon green">${accepted}</span><small>Accepted applicants</small><strong>${accepted}</strong><em>${posts.filter(p=>p.published).length} published post${posts.filter(p=>p.published).length===1?"":"s"}</em></article>`;
+
+    const recent=[...applications].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).slice(0,5);
+    q("#overview-recent").innerHTML=recent.length
+      ?recent.map(a=>`<p><strong>${a.student_name}</strong><small>${a.application_number} · ${STATUS_LABELS[a.status]||a.status} · ${new Date(a.created_at).toLocaleDateString()}</small></p>`).join("")
+      :`<p class="muted-note">No applications yet.</p>`;
+
+    const now=new Date();
+    const upcoming=posts.filter(p=>p.category==="event"&&p.event_date&&new Date(p.event_date)>now).sort((a,b)=>new Date(a.event_date)-new Date(b.event_date)).slice(0,5);
+    q("#overview-events").innerHTML=upcoming.length
+      ?upcoming.map(p=>`<p><strong>${p.title}</strong><small>${new Date(p.event_date).toLocaleDateString()}${p.location?" · "+p.location:""}</small></p>`).join("")
+      :`<p class="muted-note">No upcoming events scheduled.</p>`;
+  }catch(err){
+    target.innerHTML=`<p class="muted-note">Could not load dashboard stats: ${err.message}</p>`;
+  }
 }
 
 function renderAdminList(){
