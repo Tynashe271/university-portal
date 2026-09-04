@@ -17,3 +17,22 @@ const trackForm=$("#track-form");
 if(trackForm)trackForm.addEventListener("submit",e=>{e.preventDefault();const ref=$("#track-ref").value.trim().toUpperCase(),apps=JSON.parse(localStorage.getItem("anyschool-applications")||"{}"),app=apps[ref],result=$("#track-result");result.className=`track-result ${app?"success":"error"}`;result.textContent=app?`✓ ${app.status} — ${app.firstName} ${app.lastName}, ${app.level}. Submitted ${new Date(app.date).toLocaleDateString()}.`:"No application was found on this device. Check the reference and try again."});
 const contactForm=$("#contact-form");
 if(contactForm)contactForm.addEventListener("submit",e=>{e.preventDefault();const data=new FormData(contactForm),subject=encodeURIComponent(`[${data.get("topic")}] Website enquiry from ${data.get("name")}`),body=encodeURIComponent(`${data.get("message")}\n\nFrom: ${data.get("name")}\nEmail: ${data.get("email")}`);$("#contact-note").textContent="Your email application will open. Replace the placeholder school email before publishing.";location.href=`mailto:office@anyschool.example?subject=${subject}&body=${body}`});
+
+/* ---------- Public news & events feed ---------- */
+const newsGrid=$("#news-grid");
+if(newsGrid){
+  const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const catLabel=p=>p.category==="event"?"Event":"News";
+  const dateFor=p=>new Date(p.category==="event"&&p.event_date?p.event_date:p.created_at);
+  const longDate=d=>d.toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"});
+  const dayNum=d=>String(d.getDate()).padStart(2,"0");
+  const monAbbr=d=>d.toLocaleDateString("en-GB",{month:"short"}).toUpperCase();
+  fetch("http://localhost:8000/api/news/posts/").then(r=>r.json()).then(data=>{
+    const posts=data.results||data;
+    if(!posts.length){newsGrid.innerHTML=`<p class="placeholder-note">No news or events have been posted yet — check back soon.</p>`;return}
+    const [featured,...rest]=posts;
+    const featuredHtml=`<article class="news-card main-news"><div class="news-art"><span>${catLabel(featured)}</span><b>${dayNum(dateFor(featured))}</b></div><div class="news-body"><small>${catLabel(featured)} · ${longDate(dateFor(featured))}${featured.location?" · "+esc(featured.location):""}</small><h3>${esc(featured.title)}</h3><p>${esc(featured.summary)}</p></div></article>`;
+    const updatesHtml=rest.length?rest.map(p=>`<article><time><b>${dayNum(dateFor(p))}</b>${monAbbr(dateFor(p))}</time><div><small>${catLabel(p)}</small><h3>${esc(p.title)}</h3><p>${esc(p.summary)}</p></div></article>`).join(""):`<p class="placeholder-note">No further updates yet.</p>`;
+    newsGrid.innerHTML=featuredHtml+`<div class="updates">${updatesHtml}</div>`;
+  }).catch(()=>{newsGrid.innerHTML=`<p class="placeholder-note">Could not load news and events right now. Please try again later.</p>`});
+}
