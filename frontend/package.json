@@ -1,0 +1,8 @@
+{
+  "name": "anyschool-high-school",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  }
+}

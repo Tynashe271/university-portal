@@ -1,0 +1,6 @@
+chongogwe_high_application/
+.agents/
+.vscode/
+skills-lock.json
+dist/
+*.tar.gz
