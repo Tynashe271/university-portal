@@ -389,6 +389,13 @@ q("#review-reject")?.addEventListener("click",()=>decideReview("reject"));
 q("#admin-logout")?.addEventListener("click",()=>{sessionStorage.removeItem(adminSessionStorageKey);location.reload()});
 q("#admin-search")?.addEventListener("input",renderAdminList);
 
+// Applications and News & events are kept as separate tabs so staff never
+// mix up which panel they're acting on.
+qa(".admin-tabs .tab-btn").forEach(btn=>btn.addEventListener("click",()=>{
+  qa(".admin-tabs .tab-btn").forEach(b=>b.classList.toggle("active",b===btn));
+  qa(".admin-panel").forEach(p=>p.hidden=p.dataset.panel!==btn.dataset.tab);
+}));
+
 /* ---------- News & events admin ---------- */
 let allNewsPosts=[];
 const newsForm=q("#news-form");
