@@ -295,11 +295,13 @@ if(adminLogin)adminLogin.onsubmit=async e=>{
     loadFeesAdmin();
     loadResultsAdmin();
     loadDisciplineAdmin();
+    loadParentsAdmin();
+    loadCommunicationAdmin();
   }catch(err){
     q("#admin-error").textContent=err.message;
   }
 };
-if(adminDash&&getAdminSession()){q("#admin-login").hidden=true;adminDash.hidden=false;loadAdmin();loadAdminOverview();loadAcademics();loadAdminStudents();loadTimetableAdmin();initAttendancePanel();loadFeesAdmin();loadResultsAdmin();loadDisciplineAdmin()}
+if(adminDash&&getAdminSession()){q("#admin-login").hidden=true;adminDash.hidden=false;loadAdmin();loadAdminOverview();loadAcademics();loadAdminStudents();loadTimetableAdmin();initAttendancePanel();loadFeesAdmin();loadResultsAdmin();loadDisciplineAdmin();loadParentsAdmin();loadCommunicationAdmin()}
 
 async function loadAdmin(){
   const target=q("#admin-applications");if(!target)return;
@@ -1097,3 +1099,72 @@ function renderIncidents(){
 }
 wireAdminForm("#incident-form","/auth/discipline/",d=>({student:d.get("student"),incident_type:d.get("incident_type"),severity:d.get("severity"),location:d.get("location")||"",description:d.get("description"),action_taken:d.get("action_taken")||"",follow_up_required:d.get("follow_up_required")==="on",follow_up_date:d.get("follow_up_date")||null,parent_notified:d.get("parent_notified")==="on"}),"#incident-form-error",loadDisciplineAdmin);
 wireAdminDeleteList("#incident-list","deleteIncident",id=>`/auth/discipline/${id}/`,loadDisciplineAdmin,"Delete this incident record?");
+
+/* ---------- Parents & guardians admin ---------- */
+let allParents=[];
+
+async function loadParentsAdmin(){
+  const target=q("#parent-list");if(!target)return;
+  const session=getAdminSession();if(!session)return;
+  try{
+    const [parentsRes,studentsRes]=await Promise.all([
+      api("/parent-communication/parents/",{token:session.token}),
+      api("/auth/users/?role=student",{token:session.token}),
+    ]);
+    allParents=parentsRes.results||parentsRes;
+    const students=studentsRes.results||studentsRes;
+    const studentSelect=q("#parent-student-select");
+    if(studentSelect)studentSelect.innerHTML=students.map(s=>`<option value="${s.id}">${(s.first_name||s.last_name)?`${s.first_name} ${s.last_name}`.trim():s.username} (${s.student_id||s.username})</option>`).join("")||`<option value="">No students yet</option>`;
+    renderParents();
+  }catch(err){
+    target.innerHTML=`<p class="muted-note">Could not load parents: ${err.message}</p>`;
+  }
+}
+function renderParents(){
+  const target=q("#parent-list");if(!target)return;
+  target.innerHTML=allParents.length?allParents.map(p=>`<article class="admin-application"><div><h3>${p.parent_name}</h3><p>${p.username} · ${p.relationship}${p.phone?" · "+p.phone:""}${p.email?" · "+p.email:""} · Linked to: ${p.children.map(c=>c.student_name).join(", ")||"no one yet"}</p></div></article>`).join(""):`<p class="muted-note">No parent/guardian accounts yet.</p>`;
+}
+if(q("#parent-form"))q("#parent-form").onsubmit=async e=>{
+  e.preventDefault();
+  const session=getAdminSession();if(!session)return;
+  const d=new FormData(e.currentTarget);
+  q("#parent-form-error").textContent="";
+  const submitBtn=e.currentTarget.querySelector('button[type="submit"]');
+  submitBtn.disabled=true;
+  try{
+    const res=await api("/parent-communication/parents/quick_add/",{method:"POST",body:{full_name:d.get("full_name"),relationship:d.get("relationship"),student:d.get("student"),phone:d.get("phone")||"",email:d.get("email")||""},token:session.token});
+    e.currentTarget.reset();
+    alert(`Parent account created.\n\nUsername: ${res.username}\nTemporary password: ${res.temporary_password}\n\nShare these now — this password is shown only once.`);
+    await loadParentsAdmin();
+  }catch(err){
+    q("#parent-form-error").textContent=err.message;
+  }finally{
+    submitBtn.disabled=false;
+  }
+};
+
+/* ---------- Communication admin ---------- */
+let allMessages=[];
+
+async function loadCommunicationAdmin(){
+  const target=q("#message-list");if(!target)return;
+  const session=getAdminSession();if(!session)return;
+  try{
+    const [msgRes,usersRes]=await Promise.all([
+      api("/parent-communication/messages/",{token:session.token}),
+      api("/auth/users/",{token:session.token}),
+    ]);
+    allMessages=msgRes.results||msgRes;
+    const users=(usersRes.results||usersRes).filter(u=>u.role!=="admin");
+    const recipientSelect=q("#message-recipient-select");
+    if(recipientSelect)recipientSelect.innerHTML=users.map(u=>`<option value="${u.id}">${(u.first_name||u.last_name)?`${u.first_name} ${u.last_name}`.trim():u.username} (${u.role})</option>`).join("")||`<option value="">No recipients yet</option>`;
+    renderMessages();
+  }catch(err){
+    target.innerHTML=`<p class="muted-note">Could not load messages: ${err.message}</p>`;
+  }
+}
+function renderMessages(){
+  const target=q("#message-list");if(!target)return;
+  target.innerHTML=allMessages.length?allMessages.map(m=>`<article class="admin-application"><div><span class="decision-status ${m.priority==="urgent"||m.priority==="high"?"rejected":"accepted"}">${m.message_type}</span><h3>${m.subject}</h3><p>To ${m.recipient_name} · ${m.body} · ${new Date(m.sent_at).toLocaleString()}</p></div></article>`).join(""):`<p class="muted-note">No messages sent yet.</p>`;
+}
+wireAdminForm("#message-form","/parent-communication/messages/",d=>({recipient:d.get("recipient"),subject:d.get("subject"),body:d.get("body"),message_type:d.get("message_type"),priority:d.get("priority")}),"#message-form-error",loadCommunicationAdmin);
