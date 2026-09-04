@@ -1,12 +1,65 @@
-from rest_framework import generics, status, permissions
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework import generics, status, permissions, viewsets
+from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
 from django.db.models import Count, Q
 from django.utils import timezone
-from .models import AttendanceRecord, AttendanceSession, AttendanceSummary
-from .serializers import AttendanceRecordSerializer, AttendanceSessionSerializer, AttendanceSummarySerializer
+from .models import AttendanceRecord, AttendanceSession, AttendanceSummary, DailyAttendance
+from .serializers import AttendanceRecordSerializer, AttendanceSessionSerializer, AttendanceSummarySerializer, DailyAttendanceSerializer
 from courses.models import Enrollment
 from students.models import User
+from config.permissions import IsAdminUser
+
+
+class DailyAttendanceViewSet(viewsets.ModelViewSet):
+    queryset = DailyAttendance.objects.all()
+    serializer_class = DailyAttendanceSerializer
+    permission_classes = [IsAdminUser]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        date = self.request.query_params.get('date')
+        classroom = self.request.query_params.get('classroom')
+        student = self.request.query_params.get('student')
+        if date:
+            queryset = queryset.filter(date=date)
+        if classroom:
+            queryset = queryset.filter(student__classroom=classroom)
+        if student:
+            queryset = queryset.filter(student=student)
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(marked_by=self.request.user)
+
+    @action(detail=False, methods=['post'])
+    def bulk_mark(self, request):
+        """Mark a whole class's register for one day in a single call:
+        {"classroom": 3, "date": "2026-09-04", "entries": [{"student": 5, "status": "present"}, ...]}
+        Updates any existing mark for that student/date rather than erroring
+        on the unique_together, so re-submitting a corrected register works.
+        """
+        classroom_id = request.data.get('classroom')
+        date = request.data.get('date')
+        entries = request.data.get('entries', [])
+        if not date or not entries:
+            return Response({'error': 'date and entries are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        saved = []
+        for entry in entries:
+            student_id = entry.get('student')
+            if not student_id:
+                continue
+            record, _created = DailyAttendance.objects.update_or_create(
+                student_id=student_id,
+                date=date,
+                defaults={
+                    'status': entry.get('status', 'present'),
+                    'reason': entry.get('reason', ''),
+                    'marked_by': request.user,
+                },
+            )
+            saved.append(record.id)
+        return Response({'marked': len(saved), 'ids': saved}, status=status.HTTP_200_OK)
 
 class AttendanceRecordListCreateView(generics.ListCreateAPIView):
     queryset = AttendanceRecord.objects.all()

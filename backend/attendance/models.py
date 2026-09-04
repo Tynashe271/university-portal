@@ -204,3 +204,31 @@ class AttendanceKiosk(models.Model):
     
     def __str__(self):
         return f"{self.kiosk_name} - {self.kiosk_type}"
+
+
+class DailyAttendance(models.Model):
+    """One attendance mark per student per day — how a Zimbabwean high
+    school actually takes register, as opposed to AttendanceRecord above
+    which is per-course-enrollment (a university shape that doesn't apply
+    here, since students attend as a whole class, not per elective)."""
+    STATUS_CHOICES = [
+        ('present', 'Present'),
+        ('absent', 'Absent'),
+        ('late', 'Late'),
+        ('excused', 'Excused'),
+    ]
+
+    student = models.ForeignKey('students.User', on_delete=models.CASCADE, related_name='daily_attendance')
+    date = models.DateField()
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='present')
+    reason = models.CharField(max_length=300, blank=True, help_text="Reason for absence/lateness, if known")
+    marked_by = models.ForeignKey('students.User', on_delete=models.SET_NULL, null=True, related_name='marked_daily_attendance')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'daily_attendance'
+        unique_together = ['student', 'date']
+        ordering = ['-date']
+
+    def __str__(self):
+        return f"{self.student.username} - {self.date} ({self.status})"

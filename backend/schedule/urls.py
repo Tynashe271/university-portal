@@ -1,12 +1,18 @@
-from django.urls import path
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
 from .views import (
     TimeSlotListCreateView, TimeSlotDetailView,
     ScheduleListCreateView, ScheduleDetailView,
     TimetableListView, generate_timetable, user_schedule,
-    detect_conflicts, resolve_conflict
+    detect_conflicts, resolve_conflict, ClassPeriodViewSet
 )
 
+router = DefaultRouter()
+router.register(r'periods', ClassPeriodViewSet, basename='class-period')
+
 urlpatterns = [
+    path('', include(router.urls)),
+
     # Time Slots
     path('time-slots/', TimeSlotListCreateView.as_view(), name='time-slot-list'),
     path('time-slots/<int:pk>/', TimeSlotDetailView.as_view(), name='time-slot-detail'),

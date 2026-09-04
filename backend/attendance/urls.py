@@ -1,12 +1,18 @@
-from django.urls import path
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
 from .views import (
     AttendanceRecordListCreateView, AttendanceRecordDetailView,
     AttendanceSessionListCreateView, AttendanceSessionDetailView,
     AttendanceSummaryListView, bulk_mark_attendance,
-    student_attendance_report, course_attendance_report
+    student_attendance_report, course_attendance_report, DailyAttendanceViewSet
 )
 
+router = DefaultRouter()
+router.register(r'daily', DailyAttendanceViewSet, basename='daily-attendance')
+
 urlpatterns = [
+    path('', include(router.urls)),
+
     # Attendance Records
     path('records/', AttendanceRecordListCreateView.as_view(), name='attendance-record-list'),
     path('records/<int:pk>/', AttendanceRecordDetailView.as_view(), name='attendance-record-detail'),

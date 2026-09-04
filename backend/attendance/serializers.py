@@ -1,5 +1,21 @@
 from rest_framework import serializers
-from .models import AttendanceRecord, AttendanceSession, AttendanceSummary
+from .models import AttendanceRecord, AttendanceSession, AttendanceSummary, DailyAttendance
+
+
+class DailyAttendanceSerializer(serializers.ModelSerializer):
+    student_name = serializers.SerializerMethodField()
+    student_id = serializers.CharField(source='student.student_id', read_only=True)
+    classroom_name = serializers.CharField(source='student.classroom.name', read_only=True, default=None)
+    marked_by_name = serializers.CharField(source='marked_by.username', read_only=True, default=None)
+
+    class Meta:
+        model = DailyAttendance
+        fields = ['id', 'student', 'student_name', 'student_id', 'classroom_name',
+                  'date', 'status', 'reason', 'marked_by', 'marked_by_name', 'created_at']
+        read_only_fields = ['id', 'marked_by', 'created_at']
+
+    def get_student_name(self, obj):
+        return f"{obj.student.first_name} {obj.student.last_name}".strip() or obj.student.username
 
 class AttendanceRecordSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source='enrollment.student.username', read_only=True)

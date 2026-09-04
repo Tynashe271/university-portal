@@ -1,11 +1,31 @@
-from rest_framework import generics, status, permissions
+from rest_framework import generics, status, permissions, viewsets
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from django.db.models import Q
-from .models import TimeSlot, Schedule, Timetable, ClassConflict
-from .serializers import TimeSlotSerializer, ScheduleSerializer, TimetableSerializer, ClassConflictSerializer
+from .models import TimeSlot, Schedule, Timetable, ClassConflict, ClassPeriod
+from .serializers import TimeSlotSerializer, ScheduleSerializer, TimetableSerializer, ClassConflictSerializer, ClassPeriodSerializer
 from courses.models import Course, Enrollment
 from students.models import User
+from config.permissions import IsAdminUser
+
+
+class ClassPeriodViewSet(viewsets.ModelViewSet):
+    queryset = ClassPeriod.objects.all()
+    serializer_class = ClassPeriodSerializer
+    permission_classes = [IsAdminUser]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        classroom = self.request.query_params.get('classroom')
+        teacher = self.request.query_params.get('teacher')
+        academic_year = self.request.query_params.get('academic_year')
+        if classroom:
+            queryset = queryset.filter(classroom=classroom)
+        if teacher:
+            queryset = queryset.filter(teacher=teacher)
+        if academic_year:
+            queryset = queryset.filter(academic_year=academic_year)
+        return queryset
 
 class TimeSlotListCreateView(generics.ListCreateAPIView):
     queryset = TimeSlot.objects.all()

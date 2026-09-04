@@ -66,6 +66,35 @@ class Timetable(models.Model):
     def __str__(self):
         return f"{self.user.username} - {self.semester} {self.academic_year}"
 
+class ClassPeriod(models.Model):
+    """A subject taught to a class (academics.Classroom) at a given
+    TimeSlot by a teacher — the actual high-school timetable unit.
+
+    Kept separate from Schedule/Timetable above, which are shaped for
+    per-course university enrollment (Schedule FKs to courses.Course) and
+    don't fit a Form 1-6 school where a whole class sits together for a
+    period. TimeSlot itself has no such coupling, so it's reused as-is.
+    """
+    classroom = models.ForeignKey('academics.Classroom', on_delete=models.CASCADE, related_name='periods')
+    subject = models.ForeignKey('academics.Subject', on_delete=models.CASCADE, related_name='periods')
+    teacher = models.ForeignKey('staff.StaffProfile', on_delete=models.SET_NULL, null=True, blank=True, related_name='periods')
+    time_slot = models.ForeignKey(TimeSlot, on_delete=models.CASCADE, related_name='class_periods')
+    room = models.CharField(max_length=50, blank=True, help_text="Defaults to the classroom's own room if left blank")
+    academic_year = models.CharField(max_length=10)
+
+    class Meta:
+        db_table = 'class_periods'
+        # A class can't be in two places at once...
+        unique_together = ['classroom', 'time_slot', 'academic_year']
+        ordering = ['time_slot__day', 'time_slot__start_time']
+
+    def effective_room(self):
+        return self.room or self.classroom.room
+
+    def __str__(self):
+        return f"{self.classroom.name} · {self.subject.name} · {self.time_slot}"
+
+
 class ClassConflict(models.Model):
     schedule1 = models.ForeignKey(Schedule, on_delete=models.CASCADE, related_name='conflicts_as_first')
     schedule2 = models.ForeignKey(Schedule, on_delete=models.CASCADE, related_name='conflicts_as_second')
