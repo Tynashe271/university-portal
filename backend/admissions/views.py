@@ -4,6 +4,7 @@ from django.utils import timezone
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from admins.utils import log_action
 from .classing import MAX_POINTS, MIN_POINTS, assign_class
 from .emails import send_application_confirmation_email
 from .models import AdmissionApplication, MeritList
@@ -106,6 +107,8 @@ class AdmissionApplicationViewSet(viewsets.ModelViewSet):
                 note = f"Automatically declined: every Form 1 class from the applicant's points band ({points} points) upward is already full."
                 application.additional_notes = f"{application.additional_notes}\n{note}".strip()
                 application.save()
+                log_action(request.user, 'update', 'AdmissionApplication', application.id,
+                           f"Auto-declined {application.application_number}: {note}", request)
                 return Response({
                     'status': 'rejected',
                     'reason': 'All classes for this grade are already full.',
@@ -121,6 +124,8 @@ class AdmissionApplicationViewSet(viewsets.ModelViewSet):
         # Generate the PDF acceptance letter so it's ready to download from
         # the applicant portal as soon as the applicant checks their status.
         letter_generated = generate_acceptance_letter(application)
+        log_action(request.user, 'update', 'AdmissionApplication', application.id,
+                   f"Approved {application.application_number}" + (f" into class {application.assigned_class}" if application.assigned_class else ""), request)
         return Response({
             'status': 'approved',
             'assigned_class': application.assigned_class or None,
@@ -191,6 +196,8 @@ class AdmissionApplicationViewSet(viewsets.ModelViewSet):
         )
         application.status = 'enrolled'
         application.save()
+        log_action(request.user, 'create', 'User', user.id,
+                   f"Converted {application.application_number} into student account {user.username}", request)
 
         return Response({
             'username': user.username,
@@ -206,6 +213,8 @@ class AdmissionApplicationViewSet(viewsets.ModelViewSet):
         application.reviewed_by = request.user
         application.reviewed_date = timezone.now()
         application.save()
+        log_action(request.user, 'update', 'AdmissionApplication', application.id,
+                   f"Rejected {application.application_number}", request)
         return Response({'status': 'rejected'})
 
 

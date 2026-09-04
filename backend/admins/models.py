@@ -49,3 +49,31 @@ class SystemLog(models.Model):
         
     def __str__(self):
         return f"{self.user.username if self.user else 'System'} - {self.action} - {self.model_name}"
+
+
+class SchoolSettings(models.Model):
+    """Single-row school-wide configuration. Use SchoolSettings.load() to
+    get the one instance, creating it with sensible defaults on first use,
+    rather than instantiating the model directly."""
+    school_name = models.CharField(max_length=200, default='Anyschool High School')
+    motto = models.CharField(max_length=300, blank=True, default='Learning with purpose, character and ambition.')
+    address = models.CharField(max_length=300, blank=True)
+    phone = models.CharField(max_length=20, blank=True)
+    email = models.EmailField(blank=True)
+    current_academic_year = models.CharField(max_length=10, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'school_settings'
+
+    def save(self, *args, **kwargs):
+        self.pk = 1  # enforce a single row
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls):
+        obj, _created = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def __str__(self):
+        return self.school_name

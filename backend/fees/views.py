@@ -1,5 +1,6 @@
 from django.db.models import Sum
 from rest_framework import permissions, viewsets
+from admins.utils import log_action
 from config.permissions import IsAdminUser
 from .models import FeeStructure, FeeAccount, FeePayment
 from .serializers import FeeStructureSerializer, FeeAccountSerializer, FeePaymentSerializer
@@ -74,3 +75,5 @@ class FeePaymentViewSet(viewsets.ModelViewSet):
         account.fees_paid = account.payments.filter(status='completed').aggregate(total=Sum('amount'))['total'] or 0
         account.fees_due = account.calculate_due()
         account.save()
+        log_action(self.request.user, 'create', 'FeePayment', payment.id,
+                   f"Recorded US$ {payment.amount} payment ({payment.receipt_number}) for {account.student.username}", self.request)

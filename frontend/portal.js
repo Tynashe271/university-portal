@@ -300,11 +300,15 @@ if(adminLogin)adminLogin.onsubmit=async e=>{
     loadLibraryAdmin();
     loadTransportAdmin();
     loadInventoryAdmin();
+    loadUsersAdmin();
+    loadAuditLogsAdmin();
+    loadReportsAdmin();
+    loadSettingsAdmin();
   }catch(err){
     q("#admin-error").textContent=err.message;
   }
 };
-if(adminDash&&getAdminSession()){q("#admin-login").hidden=true;adminDash.hidden=false;loadAdmin();loadAdminOverview();loadAcademics();loadAdminStudents();loadTimetableAdmin();initAttendancePanel();loadFeesAdmin();loadResultsAdmin();loadDisciplineAdmin();loadParentsAdmin();loadCommunicationAdmin();loadLibraryAdmin();loadTransportAdmin();loadInventoryAdmin()}
+if(adminDash&&getAdminSession()){q("#admin-login").hidden=true;adminDash.hidden=false;loadAdmin();loadAdminOverview();loadAcademics();loadAdminStudents();loadTimetableAdmin();initAttendancePanel();loadFeesAdmin();loadResultsAdmin();loadDisciplineAdmin();loadParentsAdmin();loadCommunicationAdmin();loadLibraryAdmin();loadTransportAdmin();loadInventoryAdmin();loadUsersAdmin();loadAuditLogsAdmin();loadReportsAdmin();loadSettingsAdmin()}
 
 async function loadAdmin(){
   const target=q("#admin-applications");if(!target)return;
@@ -1301,3 +1305,123 @@ function renderAssets(){
 }
 wireAdminForm("#asset-form","/inventory/assets/",d=>({asset_code:d.get("asset_code"),name:d.get("name"),asset_type:d.get("asset_type"),status:d.get("status"),location:d.get("location")||"",purchase_cost:d.get("purchase_cost")||null}),"#asset-form-error",loadInventoryAdmin);
 wireAdminDeleteList("#asset-list","deleteAsset",id=>`/inventory/assets/${id}/`,loadInventoryAdmin,"Delete this asset record?");
+
+/* ---------- Users, roles & permissions admin ---------- */
+let allPermissions=[],allSystemUsers=[];
+const PERMISSION_LABELS={manage_users:"Manage users",manage_courses:"Manage courses",manage_enrollments:"Manage enrollments",manage_grades:"Manage grades",view_reports:"View reports",system_settings:"System settings"};
+
+async function loadUsersAdmin(){
+  const target=q("#permission-list");if(!target)return;
+  const session=getAdminSession();if(!session)return;
+  try{
+    const [permRes,usersRes]=await Promise.all([
+      api("/admin/permissions/",{token:session.token}),
+      api("/auth/users/",{token:session.token}),
+    ]);
+    allPermissions=permRes.results||permRes;
+    allSystemUsers=usersRes.results||usersRes;
+    const admins=allSystemUsers.filter(u=>u.role==="admin");
+    const adminSelect=q("#permission-admin-select");
+    if(adminSelect)adminSelect.innerHTML=admins.map(u=>`<option value="${u.id}">${u.username}</option>`).join("")||`<option value="">No admin accounts</option>`;
+    renderPermissions();renderSystemUsers();
+  }catch(err){
+    target.innerHTML=`<p class="muted-note">Could not load users: ${err.message}</p>`;
+  }
+}
+function renderPermissions(){
+  const target=q("#permission-list");if(!target)return;
+  target.innerHTML=allPermissions.length?allPermissions.map(p=>`<article class="admin-application"><div><h3>${p.admin_name}</h3><p>${PERMISSION_LABELS[p.permission]||p.permission} · granted by ${p.granted_by_name} · ${new Date(p.granted_at).toLocaleDateString()}</p></div><div class="decision-actions"><button class="reject-button" data-delete-permission="${p.id}">Revoke</button></div></article>`).join(""):`<p class="muted-note">No extra permissions granted yet.</p>`;
+}
+function renderSystemUsers(){
+  const target=q("#user-list");if(!target)return;
+  target.innerHTML=allSystemUsers.length?allSystemUsers.map(u=>`<article class="admin-application"><div><span class="decision-status ${u.role==="admin"?"accepted":"under-review"}">${u.role}</span><h3>${(u.first_name||u.last_name)?`${u.first_name} ${u.last_name}`.trim():u.username}</h3><p>${u.username}${u.email?" · "+u.email:""}</p></div></article>`).join(""):`<p class="muted-note">No users yet.</p>`;
+}
+if(q("#permission-form"))q("#permission-form").onsubmit=async e=>{
+  e.preventDefault();
+  const session=getAdminSession();if(!session)return;
+  const d=new FormData(e.currentTarget);
+  q("#permission-form-error").textContent="";
+  const submitBtn=e.currentTarget.querySelector('button[type="submit"]');
+  submitBtn.disabled=true;
+  try{
+    await api("/admin/permissions/grant/",{method:"POST",body:{admin_id:d.get("admin_id"),permission:d.get("permission")},token:session.token});
+    e.currentTarget.reset();
+    await loadUsersAdmin();
+  }catch(err){
+    q("#permission-form-error").textContent=err.message;
+  }finally{
+    submitBtn.disabled=false;
+  }
+};
+wireAdminDeleteList("#permission-list","deletePermission",id=>`/admin/permissions/${id}/`,loadUsersAdmin,"Revoke this permission?");
+
+/* ---------- Audit logs admin ---------- */
+async function loadAuditLogsAdmin(){
+  const target=q("#audit-log-list");if(!target)return;
+  const session=getAdminSession();if(!session)return;
+  try{
+    const res=await api("/admin/logs/",{token:session.token});
+    const logs=res.results||res;
+    target.innerHTML=logs.length?logs.map(l=>`<p><strong>${l.username||"System"}</strong><small>${l.action} · ${l.model_name} · ${l.description} · ${new Date(l.timestamp).toLocaleString()}</small></p>`).join(""):`<p class="muted-note">No activity logged yet.</p>`;
+  }catch(err){
+    target.innerHTML=`<p class="muted-note">Could not load audit logs: ${err.message}</p>`;
+  }
+}
+
+/* ---------- Reports admin ---------- */
+async function loadReportsAdmin(){
+  const target=q("#reports-body");if(!target)return;
+  const session=getAdminSession();if(!session)return;
+  target.innerHTML=`<p class="muted-note">Loading…</p>`;
+  try{
+    const r=await api("/admin/reports/",{token:session.token});
+    const gradeRows=r.enrolment.by_grade.length?r.enrolment.by_grade.map(g=>`<tr><td>${GRADE_LABELS_FULL[g.classroom__grade]||g.classroom__grade}</td><td>${g.count}</td></tr>`).join(""):`<tr><td colspan="2">No students placed in a class yet</td></tr>`;
+    const admissionRows=r.admissions.by_status.length?r.admissions.by_status.map(a=>`<tr><td>${STATUS_LABELS[a.status]||a.status}</td><td>${a.count}</td></tr>`).join(""):`<tr><td colspan="2">No applications yet</td></tr>`;
+    const disciplineRows=r.discipline.by_severity.length?r.discipline.by_severity.map(d=>`<tr><td>${d.severity[0].toUpperCase()+d.severity.slice(1)}</td><td>${d.count}</td></tr>`).join(""):`<tr><td colspan="2">No incidents logged</td></tr>`;
+    target.innerHTML=`
+      <div class="report-section"><h3>Enrolment — ${r.enrolment.total_students} student${r.enrolment.total_students===1?"":"s"}</h3><table>${gradeRows}</table></div>
+      <div class="report-section"><h3>Attendance (last 30 days)</h3><table><tr><td>Present/late rate</td><td>${r.attendance.rate_last_30_days!=null?r.attendance.rate_last_30_days+"%":"No records yet"}</td></tr><tr><td>Records logged</td><td>${r.attendance.records_last_30_days}</td></tr></table></div>
+      <div class="report-section"><h3>Fees</h3><table><tr><td>Total collected</td><td>US$ ${r.fees.total_collected}</td></tr><tr><td>Total outstanding</td><td>US$ ${r.fees.total_outstanding}</td></tr></table></div>
+      <div class="report-section"><h3>Admissions</h3><table>${admissionRows}</table></div>
+      <div class="report-section"><h3>Library</h3><table><tr><td>Active checkouts</td><td>${r.library.active_checkouts}</td></tr><tr><td>Overdue</td><td>${r.library.overdue_checkouts}</td></tr></table></div>
+      <div class="report-section"><h3>Discipline</h3><table>${disciplineRows}</table></div>
+    `;
+  }catch(err){
+    target.innerHTML=`<p class="muted-note">Could not load the report: ${err.message}</p>`;
+  }
+}
+q("#reports-refresh")?.addEventListener("click",loadReportsAdmin);
+
+/* ---------- Settings admin ---------- */
+async function loadSettingsAdmin(){
+  const form=q("#settings-form");if(!form)return;
+  const session=getAdminSession();if(!session)return;
+  try{
+    const s=await api("/admin/settings/",{token:session.token});
+    form.school_name.value=s.school_name||"";
+    form.motto.value=s.motto||"";
+    form.address.value=s.address||"";
+    form.phone.value=s.phone||"";
+    form.email.value=s.email||"";
+    form.current_academic_year.value=s.current_academic_year||"";
+  }catch(err){
+    q("#settings-form-error").textContent="Could not load settings: "+err.message;
+  }
+}
+if(q("#settings-form"))q("#settings-form").onsubmit=async e=>{
+  e.preventDefault();
+  const session=getAdminSession();if(!session)return;
+  const d=new FormData(e.currentTarget);
+  q("#settings-form-error").textContent="";
+  const submitBtn=e.currentTarget.querySelector('button[type="submit"]');
+  submitBtn.disabled=true;
+  try{
+    await api("/admin/settings/",{method:"PATCH",body:{school_name:d.get("school_name"),motto:d.get("motto")||"",address:d.get("address")||"",phone:d.get("phone")||"",email:d.get("email")||"",current_academic_year:d.get("current_academic_year")||""},token:session.token});
+    q("#settings-form-error").textContent="";
+    alert("Settings saved.");
+  }catch(err){
+    q("#settings-form-error").textContent=err.message;
+  }finally{
+    submitBtn.disabled=false;
+  }
+};
