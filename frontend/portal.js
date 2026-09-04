@@ -287,11 +287,12 @@ if(adminLogin)adminLogin.onsubmit=async e=>{
     sessionStorage.setItem(adminSessionStorageKey,JSON.stringify({token:data.token,user:data.user}));
     q("#admin-login").hidden=true;adminDash.hidden=false;
     loadAdmin();
+    loadAdminOverview();
   }catch(err){
     q("#admin-error").textContent=err.message;
   }
 };
-if(adminDash&&getAdminSession()){q("#admin-login").hidden=true;adminDash.hidden=false;loadAdmin()}
+if(adminDash&&getAdminSession()){q("#admin-login").hidden=true;adminDash.hidden=false;loadAdmin();loadAdminOverview()}
 
 async function loadAdmin(){
   const target=q("#admin-applications");if(!target)return;
@@ -305,6 +306,47 @@ async function loadAdmin(){
     target.innerHTML=`<p class="muted-note">Could not load applications: ${err.message}</p>`;
   }
   loadAdminNews();
+  loadAdminStaff();
+}
+
+/* ---------- Admin dashboard overview (dashboard-admin.html) ---------- */
+async function loadAdminOverview(){
+  const target=q("#overview-kpis");if(!target)return;
+  const session=getAdminSession();if(!session)return;
+  try{
+    const [courseStats,appsRes,staffRes,newsRes]=await Promise.all([
+      api("/courses/dashboard/admin/",{token:session.token}).catch(()=>null),
+      api("/admissions/applications/?page_size=200",{token:session.token}).catch(()=>({results:[],count:0})),
+      api("/staff/staff-profiles/?page_size=500",{token:session.token}).catch(()=>({results:[]})),
+      api("/news/posts/?page_size=100",{token:session.token}).catch(()=>({results:[]})),
+    ]);
+    const applications=appsRes.results||appsRes||[];
+    const staffList=staffRes.results||staffRes||[];
+    const posts=newsRes.results||newsRes||[];
+    const totalApplications=appsRes.count??applications.length;
+    const pending=applications.filter(a=>["submitted","under_review"].includes(a.status)).length;
+    const accepted=applications.filter(a=>["approved","admitted","enrolled"].includes(a.status)).length;
+    const permanentTeachers=staffList.filter(s=>s.employee_type==="permanent_teacher").length;
+
+    target.innerHTML=`
+      <article><span class="stat-icon blue">${courseStats?"✓":"–"}</span><small>Total students</small><strong>${courseStats?.total_students??"–"}</strong><em>Enrolled accounts</em></article>
+      <article><span class="stat-icon purple">${staffList.length}</span><small>Teachers & staff</small><strong>${staffList.length}</strong><em>${permanentTeachers} permanent teacher${permanentTeachers===1?"":"s"}</em></article>
+      <article><span class="stat-icon orange">${pending}</span><small>Applications under review</small><strong>${pending}</strong><em>${totalApplications} total this year</em></article>
+      <article><span class="stat-icon green">${accepted}</span><small>Accepted applicants</small><strong>${accepted}</strong><em>${posts.filter(p=>p.published).length} published post${posts.filter(p=>p.published).length===1?"":"s"}</em></article>`;
+
+    const recent=[...applications].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).slice(0,5);
+    q("#overview-recent").innerHTML=recent.length
+      ?recent.map(a=>`<p><strong>${a.student_name}</strong><small>${a.application_number} · ${STATUS_LABELS[a.status]||a.status} · ${new Date(a.created_at).toLocaleDateString()}</small></p>`).join("")
+      :`<p class="muted-note">No applications yet.</p>`;
+
+    const now=new Date();
+    const upcoming=posts.filter(p=>p.category==="event"&&p.event_date&&new Date(p.event_date)>now).sort((a,b)=>new Date(a.event_date)-new Date(b.event_date)).slice(0,5);
+    q("#overview-events").innerHTML=upcoming.length
+      ?upcoming.map(p=>`<p><strong>${p.title}</strong><small>${new Date(p.event_date).toLocaleDateString()}${p.location?" · "+p.location:""}</small></p>`).join("")
+      :`<p class="muted-note">No upcoming events scheduled.</p>`;
+  }catch(err){
+    target.innerHTML=`<p class="muted-note">Could not load dashboard stats: ${err.message}</p>`;
+  }
 }
 
 function renderAdminList(){
@@ -475,6 +517,81 @@ q("#admin-news-list")?.addEventListener("click",async e=>{
     await loadAdminNews();
   }catch(err){
     alert("Could not delete post: "+err.message);
+    e.target.disabled=false;
+  }
+});
+
+/* ---------- Staff & teachers admin ---------- */
+const STAFF_CATEGORIES=[
+  ["permanent_teacher","Permanent Teachers"],
+  ["student_teacher","Student Teachers"],
+  ["staff","Staff"],
+  ["sdc_member","SDC Members"],
+];
+let allStaff=[];
+const staffForm=q("#staff-form");
+
+async function loadAdminStaff(){
+  const target=q("#admin-staff-list");if(!target)return;
+  const session=getAdminSession();if(!session)return;
+  target.innerHTML=`<p class="muted-note">Loading…</p>`;
+  try{
+    const res=await api("/staff/staff-profiles/?page_size=500",{token:session.token});
+    allStaff=res.results||res;
+    renderAdminStaff();
+  }catch(err){
+    target.innerHTML=`<p class="muted-note">Could not load staff: ${err.message}</p>`;
+  }
+}
+
+function renderAdminStaff(){
+  const target=q("#admin-staff-list");if(!target)return;
+  target.innerHTML=STAFF_CATEGORIES.map(([key,label])=>{
+    const members=allStaff.filter(s=>s.employee_type===key);
+    const rows=members.length
+      ?members.map(s=>`<article class="admin-application"><div><h3>${s.display_name}</h3><p>${[s.designation,s.department,s.phone,s.email].filter(Boolean).join(" · ")||"No further details"}</p></div><div class="decision-actions"><button class="reject-button" data-delete-staff="${s.id}">Remove</button></div></article>`).join("")
+      :`<p class="muted-note">No ${label.toLowerCase()} yet.</p>`;
+    return `<div class="staff-category"><h3 class="staff-category-head">${label} <span>${members.length}</span></h3>${rows}</div>`;
+  }).join("");
+}
+
+if(staffForm)staffForm.onsubmit=async e=>{
+  e.preventDefault();
+  const session=getAdminSession();if(!session)return;
+  const d=new FormData(staffForm);
+  q("#staff-form-error").textContent="";
+  const payload={
+    full_name:d.get("full_name"),
+    employee_type:d.get("employee_type"),
+    designation:d.get("designation")||"",
+    department:d.get("department")||"",
+    phone:d.get("phone")||"",
+    email:d.get("email")||"",
+  };
+  const submitBtn=staffForm.querySelector('button[type="submit"]');
+  submitBtn.disabled=true;
+  try{
+    await api("/staff/staff-profiles/",{method:"POST",body:payload,token:session.token});
+    staffForm.reset();
+    await loadAdminStaff();
+  }catch(err){
+    q("#staff-form-error").textContent=err.message;
+  }finally{
+    submitBtn.disabled=false;
+  }
+};
+
+q("#admin-staff-list")?.addEventListener("click",async e=>{
+  const id=e.target.dataset.deleteStaff;
+  if(!id)return;
+  if(!confirm("Remove this staff member? This cannot be undone."))return;
+  const session=getAdminSession();if(!session)return;
+  e.target.disabled=true;
+  try{
+    await api(`/staff/staff-profiles/${id}/`,{method:"DELETE",token:session.token});
+    await loadAdminStaff();
+  }catch(err){
+    alert("Could not remove staff member: "+err.message);
     e.target.disabled=false;
   }
 });

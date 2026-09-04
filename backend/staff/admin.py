@@ -3,9 +3,9 @@ from .models import StaffProfile, LeaveManagement, LeaveBalance, Payroll, Perfor
 
 @admin.register(StaffProfile)
 class StaffProfileAdmin(admin.ModelAdmin):
-    list_display = ['user', 'employee_id', 'employee_type', 'designation', 'department', 'employment_status']
+    list_display = ['name', 'employee_id', 'employee_type', 'designation', 'department', 'employment_status']
     list_filter = ['employee_type', 'employment_status', 'department']
-    search_fields = ['user__username', 'employee_id', 'designation']
+    search_fields = ['user__username', 'full_name', 'employee_id', 'designation']
 
 @admin.register(LeaveManagement)
 class LeaveManagementAdmin(admin.ModelAdmin):

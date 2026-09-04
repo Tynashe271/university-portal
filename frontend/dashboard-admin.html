@@ -1,0 +1,73 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin Dashboard | Anyschool High School</title><link rel="stylesheet" href="/portal.css?v=27"><script src="/portal.js?v=30" defer></script></head><body class="student-body">
+<section id="admin-login" class="admin-login"><div class="admin-login-card"><a class="portal-brand" href="/"><span class="portal-mark">AH</span><span><strong>Anyschool High School</strong><small>Admin Dashboard</small></span></a><h1>Staff sign in</h1><p>One login for every admin module.</p><form id="admin-login-form"><label>Staff username<input name="username" required></label><label>Password<input name="password" type="password" required></label><p id="admin-error" class="form-error"></p><button class="primary-button full-button">Sign in</button></form><small>Demo login: <b>admin</b> / <b>admin123</b></small><a class="back-link" href="/">Return to school website</a></div></section>
+<div id="admin-dashboard" class="dashboard" hidden><aside class="side-nav">
+<a class="portal-brand side-brand" href="/"><span class="portal-mark">AH</span><span><strong>Anyschool</strong><small>Admin Dashboard</small></span></a>
+<nav>
+<p class="side-label">Overview</p>
+<button class="active" data-section="overview"><b>◆</b><span>Dashboard</span></button>
+<p class="side-label">Admissions & students</p>
+<a class="nav-link" href="/admissions-admin.html"><b>↗</b><span>Admissions</span></a>
+<button data-section="students"><b>–</b><span>Student management</span></button>
+<button data-section="academic"><b>–</b><span>Academic structure</span></button>
+<p class="side-label">Teaching</p>
+<a class="nav-link" href="/admissions-admin.html#staff"><b>↗</b><span>Staff & teachers</span></a>
+<button data-section="timetable"><b>–</b><span>Timetable</span></button>
+<button data-section="attendance"><b>–</b><span>Attendance</span></button>
+<button data-section="results"><b>–</b><span>Marks & results</span></button>
+<p class="side-label">Finance</p>
+<button data-section="fees"><b>–</b><span>Fees & finance</span></button>
+<p class="side-label">Community</p>
+<button data-section="parents"><b>–</b><span>Parents & guardians</span></button>
+<button data-section="communication"><b>–</b><span>Communication</span></button>
+<button data-section="discipline"><b>–</b><span>Discipline</span></button>
+<p class="side-label">Facilities</p>
+<button data-section="library"><b>–</b><span>Library</span></button>
+<button data-section="transport"><b>–</b><span>Transport</span></button>
+<button data-section="hostel"><b>–</b><span>Hostel & boarding</span></button>
+<button data-section="sports"><b>–</b><span>Sports & clubs</span></button>
+<button data-section="inventory"><b>–</b><span>Inventory & assets</span></button>
+<p class="side-label">Planning</p>
+<a class="nav-link" href="/admissions-admin.html#news"><b>↗</b><span>News & events</span></a>
+<button data-section="calendar"><b>–</b><span>School calendar</span></button>
+<button data-section="reports"><b>–</b><span>Reports & analytics</span></button>
+<p class="side-label">System</p>
+<button data-section="users"><b>–</b><span>Users, roles & permissions</span></button>
+<button data-section="audit"><b>–</b><span>Audit logs & security</span></button>
+<button data-section="settings"><b>–</b><span>Settings</span></button>
+</nav>
+<button id="admin-logout" class="logout-button">Sign out</button>
+</aside>
+<main class="dashboard-main"><header class="dashboard-top"><button id="mobile-menu">Menu</button><div><strong id="section-title">Dashboard</strong><small>Admin overview</small></div></header><div class="dashboard-content">
+
+<section class="dash-section active" data-panel="overview">
+<div class="welcome-row"><div><p>ADMIN OVERVIEW</p><h1>Good to see you.</h1><span>Live numbers from Admissions, Staff and the school website.</span></div></div>
+<div class="stat-grid" id="overview-kpis"><article><small>Loading…</small></article></div>
+<div class="dash-grid">
+<div class="dash-card"><div class="dash-card-head"><h2>Recent admissions</h2><a href="/admissions-admin.html">Review →</a></div><div class="timeline" id="overview-recent"></div></div>
+<div class="dash-card"><div class="dash-card-head"><h2>Upcoming events</h2><a href="/admissions-admin.html#news">Manage →</a></div><div class="notice-list" id="overview-events"></div></div>
+</div>
+<div class="action-note">This dashboard shows what's actually wired up today (Admissions, Staff & teachers, News & events). Every other item in the sidebar is a planned module — click one to see what it will cover.</div>
+</section>
+
+<section class="dash-section" data-panel="students"><div class="section-heading"><h1>Student management</h1><p>Not built yet in this project.</p></div><div class="action-note">Would cover: student profiles, guardians/parents, medical & emergency info, student IDs, class placement, status, transfers, withdrawals and student history.</div></section>
+<section class="dash-section" data-panel="academic"><div class="section-heading"><h1>Academic structure</h1><p>Not built yet in this project.</p></div><div class="action-note">Would cover: grades/forms, classes, streams, subjects, departments, academic years, terms, classrooms and class capacity.</div></section>
+<section class="dash-section" data-panel="timetable"><div class="section-heading"><h1>Timetable management</h1><p>Not built yet in this project.</p></div><div class="action-note">Would cover: class timetables, teacher timetables, room allocation, conflict detection, substitutions and exam timetables.</div></section>
+<section class="dash-section" data-panel="attendance"><div class="section-heading"><h1>Attendance</h1><p>Not built yet in this project.</p></div><div class="action-note">Would cover: daily student attendance, teacher attendance, late arrivals, absences with reasons, attendance reports and parent notifications.</div></section>
+<section class="dash-section" data-panel="results"><div class="section-heading"><h1>Marks & results</h1><p>Not built yet in this project.</p></div><div class="action-note">Would cover: assessments, tests, assignments, exams, mark entry, grading rules, report cards, rankings, comments and result publishing.</div></section>
+<section class="dash-section" data-panel="fees"><div class="section-heading"><h1>Fees & finance</h1><p>Not built yet in this project.</p></div><div class="action-note">Would cover: fee structures, invoices, payments, balances, receipts, discounts/scholarships, payment plans, arrears, financial reports and reconciliation.</div></section>
+<section class="dash-section" data-panel="parents"><div class="section-heading"><h1>Parents & guardians</h1><p>Not built yet in this project.</p></div><div class="action-note">Would cover: parent accounts, linked children, contacts, communication history, and visibility into fees, results and attendance.</div></section>
+<section class="dash-section" data-panel="communication"><div class="section-heading"><h1>Communication</h1><p>Not built yet in this project.</p></div><div class="action-note">Would cover: announcements, notices, SMS/email/in-app messages, emergency messages, class messages, templates and notification history.</div></section>
+<section class="dash-section" data-panel="discipline"><div class="section-heading"><h1>Discipline</h1><p>Not built yet in this project.</p></div><div class="action-note">Would cover: incidents, warnings, sanctions, suspensions, behaviour records, follow-ups and disciplinary reports.</div></section>
+<section class="dash-section" data-panel="library"><div class="section-heading"><h1>Library</h1><p>Not built yet in this project.</p></div><div class="action-note">Would cover: books, categories, borrowing, returns, overdue items, fines and borrower history.</div></section>
+<section class="dash-section" data-panel="transport"><div class="section-heading"><h1>Transport</h1><p>Not built yet in this project.</p></div><div class="action-note">Would cover: buses, routes, drivers, student route allocation, pickup/drop-off points and transport fees.</div></section>
+<section class="dash-section" data-panel="hostel"><div class="section-heading"><h1>Hostel & boarding</h1><p>Not built yet in this project.</p></div><div class="action-note">Would cover: rooms, beds, student allocation, boarding fees, leave records, inspections and boarding status.</div></section>
+<section class="dash-section" data-panel="sports"><div class="section-heading"><h1>Sports & clubs</h1><p>Not built yet in this project.</p></div><div class="action-note">Would cover: teams, clubs, student membership, events, coaches, competitions and achievements.</div></section>
+<section class="dash-section" data-panel="inventory"><div class="section-heading"><h1>Inventory & assets</h1><p>Not built yet in this project.</p></div><div class="action-note">Would cover: computers, furniture, lab equipment, textbooks, uniforms, stock, suppliers, maintenance and asset history.</div></section>
+<section class="dash-section" data-panel="calendar"><div class="section-heading"><h1>School calendar</h1><p>Not built yet in this project.</p></div><div class="action-note">Would cover: terms, holidays, examinations, meetings, sports days, deadlines, assemblies and events in one shared calendar.</div></section>
+<section class="dash-section" data-panel="reports"><div class="section-heading"><h1>Reports & analytics</h1><p>Not built yet in this project.</p></div><div class="action-note">Would cover: enrolment, attendance, performance, fees, teacher workload, admissions, discipline and library reports, exportable to PDF/Excel/CSV.</div></section>
+<section class="dash-section" data-panel="users"><div class="section-heading"><h1>Users, roles & permissions</h1><p>Not built yet in this project.</p></div><div class="action-note">Would cover: Super Admin, Head/Principal, Deputy Head, Bursar, Admissions Officer, Teacher, Registrar, Librarian, Receptionist and other staff roles.</div></section>
+<section class="dash-section" data-panel="audit"><div class="section-heading"><h1>Audit logs & security</h1><p>Not built yet in this project.</p></div><div class="action-note">Would cover: who changed marks, approved admissions, recorded payments, edited student information, logged in, or deleted records.</div></section>
+<section class="dash-section" data-panel="settings"><div class="section-heading"><h1>Settings</h1><p>Not built yet in this project.</p></div><div class="action-note">Would cover: school information, logo, grading system, terms, fee structures, classes, subjects, notification settings, report-card templates and admission rules.</div></section>
+
+</div></main></div>
+</body></html>

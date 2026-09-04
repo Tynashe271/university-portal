@@ -1,16 +1,17 @@
 from django.db import models
 from django.conf import settings
 from django.core.validators import MinValueValidator
+from django.utils import timezone
 
 class StaffProfile(models.Model):
     """Staff profiles with qualifications and experience"""
     EMPLOYEE_TYPE_CHOICES = [
-        ('teaching', 'Teaching Staff'),
-        ('administrative', 'Administrative Staff'),
-        ('support', 'Support Staff'),
-        ('maintenance', 'Maintenance Staff'),
+        ('permanent_teacher', 'Permanent Teacher'),
+        ('student_teacher', 'Student Teacher'),
+        ('staff', 'Staff'),
+        ('sdc_member', 'SDC Member'),
     ]
-    
+
     EMPLOYMENT_STATUS_CHOICES = [
         ('active', 'Active'),
         ('on_leave', 'On Leave'),
@@ -18,33 +19,52 @@ class StaffProfile(models.Model):
         ('terminated', 'Terminated'),
         ('retired', 'Retired'),
     ]
-    
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='staff_profile')
-    employee_id = models.CharField(max_length=20, unique=True)
+
+    # A quick admin add doesn't require a login account — `user` links one
+    # up later if the person needs portal access, `full_name`/`email` cover
+    # a record added with nothing but a name and a category.
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, related_name='staff_profile')
+    full_name = models.CharField(max_length=200, blank=True)
+    email = models.EmailField(blank=True)
+    employee_id = models.CharField(max_length=20, unique=True, blank=True)
     employee_type = models.CharField(max_length=20, choices=EMPLOYEE_TYPE_CHOICES)
     employment_status = models.CharField(max_length=20, choices=EMPLOYMENT_STATUS_CHOICES, default='active')
-    designation = models.CharField(max_length=200)
-    department = models.CharField(max_length=200)
-    joining_date = models.DateField()
-    qualification = models.TextField()
+    designation = models.CharField(max_length=200, blank=True)
+    department = models.CharField(max_length=200, blank=True)
+    joining_date = models.DateField(default=timezone.localdate)
+    qualification = models.TextField(blank=True)
     experience_years = models.IntegerField(default=0)
     previous_experience = models.TextField(blank=True)
     certifications = models.JSONField(default=list)  # List of certifications
     skills = models.JSONField(default=list)  # List of skills
     subjects = models.JSONField(default=list)  # For teaching staff
     classes_assigned = models.JSONField(default=list)  # List of class assignments
-    phone = models.CharField(max_length=20)
-    emergency_contact = models.CharField(max_length=20)
-    address = models.TextField()
+    phone = models.CharField(max_length=20, blank=True)
+    emergency_contact = models.CharField(max_length=20, blank=True)
+    address = models.TextField(blank=True)
     blood_group = models.CharField(max_length=5, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
+    def name(self):
+        if self.full_name:
+            return self.full_name
+        if self.user:
+            return self.user.get_full_name() or self.user.username
+        return 'Unnamed'
+
+    def save(self, *args, **kwargs):
+        if not self.employee_id:
+            year = timezone.now().year
+            count = StaffProfile.objects.filter(created_at__year=year).count() + 1
+            self.employee_id = f"STF{year}{count:04d}"
+        super().save(*args, **kwargs)
+
     class Meta:
         db_table = 'staff_profiles'
-    
+
     def __str__(self):
-        return f"{self.user.username} - {self.designation}"
+        return f"{self.name()} - {self.get_employee_type_display()}"
 
 class LeaveManagement(models.Model):
     """Staff leave management"""
