@@ -297,11 +297,14 @@ if(adminLogin)adminLogin.onsubmit=async e=>{
     loadDisciplineAdmin();
     loadParentsAdmin();
     loadCommunicationAdmin();
+    loadLibraryAdmin();
+    loadTransportAdmin();
+    loadInventoryAdmin();
   }catch(err){
     q("#admin-error").textContent=err.message;
   }
 };
-if(adminDash&&getAdminSession()){q("#admin-login").hidden=true;adminDash.hidden=false;loadAdmin();loadAdminOverview();loadAcademics();loadAdminStudents();loadTimetableAdmin();initAttendancePanel();loadFeesAdmin();loadResultsAdmin();loadDisciplineAdmin();loadParentsAdmin();loadCommunicationAdmin()}
+if(adminDash&&getAdminSession()){q("#admin-login").hidden=true;adminDash.hidden=false;loadAdmin();loadAdminOverview();loadAcademics();loadAdminStudents();loadTimetableAdmin();initAttendancePanel();loadFeesAdmin();loadResultsAdmin();loadDisciplineAdmin();loadParentsAdmin();loadCommunicationAdmin();loadLibraryAdmin();loadTransportAdmin();loadInventoryAdmin()}
 
 async function loadAdmin(){
   const target=q("#admin-applications");if(!target)return;
@@ -1168,3 +1171,133 @@ function renderMessages(){
   target.innerHTML=allMessages.length?allMessages.map(m=>`<article class="admin-application"><div><span class="decision-status ${m.priority==="urgent"||m.priority==="high"?"rejected":"accepted"}">${m.message_type}</span><h3>${m.subject}</h3><p>To ${m.recipient_name} · ${m.body} · ${new Date(m.sent_at).toLocaleString()}</p></div></article>`).join(""):`<p class="muted-note">No messages sent yet.</p>`;
 }
 wireAdminForm("#message-form","/parent-communication/messages/",d=>({recipient:d.get("recipient"),subject:d.get("subject"),body:d.get("body"),message_type:d.get("message_type"),priority:d.get("priority")}),"#message-form-error",loadCommunicationAdmin);
+
+/* ---------- Library admin ---------- */
+let allBooks=[],allCheckouts=[];
+
+async function loadLibraryAdmin(){
+  const target=q("#book-list");if(!target)return;
+  const session=getAdminSession();if(!session)return;
+  try{
+    const [booksRes,coRes,usersRes]=await Promise.all([
+      api("/library/books/",{token:session.token}),
+      api("/library/checkouts/?status=checked_out",{token:session.token}),
+      api("/auth/users/",{token:session.token}),
+    ]);
+    allBooks=booksRes.results||booksRes;
+    allCheckouts=coRes.results||coRes;
+    const users=(usersRes.results||usersRes).filter(u=>u.role!=="admin");
+    const bookSelect=q("#checkout-book-select");
+    if(bookSelect)bookSelect.innerHTML=allBooks.filter(b=>b.available_copies>0).map(b=>`<option value="${b.id}">${b.title} (${b.available_copies} available)</option>`).join("")||`<option value="">No books available</option>`;
+    const userSelect=q("#checkout-user-select");
+    if(userSelect)userSelect.innerHTML=users.map(u=>`<option value="${u.id}">${(u.first_name||u.last_name)?`${u.first_name} ${u.last_name}`.trim():u.username} (${u.role})</option>`).join("")||`<option value="">No users yet</option>`;
+    renderBooks();renderCheckouts();
+  }catch(err){
+    target.innerHTML=`<p class="muted-note">Could not load the library: ${err.message}</p>`;
+  }
+}
+function renderBooks(){
+  const target=q("#book-list");if(!target)return;
+  target.innerHTML=allBooks.length?allBooks.map(b=>`<article class="admin-application"><div><h3>${b.title}</h3><p>${b.author} · ${b.location} · ${b.available_copies}/${b.total_copies} available</p></div><div class="decision-actions"><button class="reject-button" data-delete-book="${b.id}">Delete</button></div></article>`).join(""):`<p class="muted-note">No books catalogued yet.</p>`;
+}
+function renderCheckouts(){
+  const target=q("#checkout-list");if(!target)return;
+  target.innerHTML=allCheckouts.length?allCheckouts.map(c=>`<article class="admin-application"><div><h3>${c.book_title}</h3><p>${c.user_name} · Due ${c.due_date}</p></div><div class="decision-actions"><button class="accept-button" data-return-checkout="${c.id}">Mark returned</button></div></article>`).join(""):`<p class="muted-note">No active checkouts.</p>`;
+}
+wireAdminForm("#book-form","/library/books/",d=>({title:d.get("title"),author:d.get("author"),isbn:d.get("isbn"),publisher:d.get("publisher"),publication_year:d.get("publication_year"),genre:d.get("genre"),total_copies:d.get("total_copies"),location:d.get("location")}),"#book-form-error",loadLibraryAdmin);
+wireAdminForm("#checkout-form","/library/checkouts/",d=>({book:d.get("book"),user:d.get("user"),due_date:d.get("due_date")||undefined}),"#checkout-form-error",loadLibraryAdmin);
+wireAdminDeleteList("#book-list","deleteBook",id=>`/library/books/${id}/`,loadLibraryAdmin,"Delete this book from the catalog?");
+q("#checkout-list")?.addEventListener("click",async e=>{
+  const id=e.target.dataset.returnCheckout;
+  if(!id)return;
+  const session=getAdminSession();if(!session)return;
+  e.target.disabled=true;
+  try{
+    await api(`/library/checkouts/${id}/return_book/`,{method:"POST",token:session.token});
+    await loadLibraryAdmin();
+  }catch(err){
+    alert("Could not mark returned: "+err.message);
+    e.target.disabled=false;
+  }
+});
+
+/* ---------- Transport admin ---------- */
+let allRoutes=[],allBuses=[],allDrivers=[];
+
+async function loadTransportAdmin(){
+  const target=q("#route-list");if(!target)return;
+  const session=getAdminSession();if(!session)return;
+  try{
+    const [routesRes,busesRes,driversRes]=await Promise.all([
+      api("/transportation/routes/",{token:session.token}),
+      api("/transportation/buses/",{token:session.token}),
+      api("/transportation/drivers/",{token:session.token}),
+    ]);
+    allRoutes=routesRes.results||routesRes;
+    allBuses=busesRes.results||busesRes;
+    allDrivers=driversRes.results||driversRes;
+    const busRouteSelect=q("#bus-route-select");
+    if(busRouteSelect)busRouteSelect.innerHTML=`<option value="">— none —</option>`+allRoutes.map(r=>`<option value="${r.id}">${r.route_number} · ${r.route_name}</option>`).join("");
+    const driverBusSelect=q("#driver-bus-select");
+    if(driverBusSelect)driverBusSelect.innerHTML=`<option value="">— none —</option>`+allBuses.map(b=>`<option value="${b.id}">${b.bus_number}</option>`).join("");
+    renderRoutes();renderBuses();renderDrivers();
+  }catch(err){
+    target.innerHTML=`<p class="muted-note">Could not load transport: ${err.message}</p>`;
+  }
+}
+function renderRoutes(){
+  const target=q("#route-list");if(!target)return;
+  target.innerHTML=allRoutes.length?allRoutes.map(r=>`<article class="admin-application"><div><h3>${r.route_number} · ${r.route_name}</h3><p>${r.start_point} → ${r.end_point} · ${r.total_distance}km · ${r.estimated_duration} min</p></div><div class="decision-actions"><button class="reject-button" data-delete-route="${r.id}">Delete</button></div></article>`).join(""):`<p class="muted-note">No routes yet.</p>`;
+}
+function renderBuses(){
+  const target=q("#bus-list");if(!target)return;
+  target.innerHTML=allBuses.length?allBuses.map(b=>`<article class="admin-application"><div><h3>${b.bus_number}</h3><p>${b.license_plate} · Capacity ${b.capacity}${b.route_name?" · "+b.route_name:""}</p></div><div class="decision-actions"><button class="reject-button" data-delete-bus="${b.id}">Delete</button></div></article>`).join(""):`<p class="muted-note">No buses yet.</p>`;
+}
+function renderDrivers(){
+  const target=q("#driver-list");if(!target)return;
+  target.innerHTML=allDrivers.length?allDrivers.map(d=>`<article class="admin-application"><div><h3>${d.driver_name}</h3><p>License ${d.license_number} · Expires ${d.license_expiry_date}${d.bus_number?" · Bus "+d.bus_number:""}</p></div><div class="decision-actions"><button class="reject-button" data-delete-driver="${d.id}">Delete</button></div></article>`).join(""):`<p class="muted-note">No drivers yet.</p>`;
+}
+wireAdminForm("#route-form","/transportation/routes/",d=>({route_number:d.get("route_number"),route_name:d.get("route_name"),start_point:d.get("start_point"),end_point:d.get("end_point"),total_distance:d.get("total_distance"),estimated_duration:d.get("estimated_duration")}),"#route-form-error",loadTransportAdmin);
+wireAdminForm("#bus-form","/transportation/buses/",d=>({bus_number:d.get("bus_number"),license_plate:d.get("license_plate"),capacity:d.get("capacity"),route:d.get("route")||null}),"#bus-form-error",loadTransportAdmin);
+if(q("#driver-form"))q("#driver-form").onsubmit=async e=>{
+  e.preventDefault();
+  const session=getAdminSession();if(!session)return;
+  const d=new FormData(e.currentTarget);
+  q("#driver-form-error").textContent="";
+  const submitBtn=e.currentTarget.querySelector('button[type="submit"]');
+  submitBtn.disabled=true;
+  try{
+    const res=await api("/transportation/drivers/quick_add/",{method:"POST",body:{full_name:d.get("full_name"),license_number:d.get("license_number"),license_expiry_date:d.get("license_expiry_date"),assigned_bus:d.get("assigned_bus")||null,phone:d.get("phone")||""},token:session.token});
+    e.currentTarget.reset();
+    alert(`Driver account created.\n\nUsername: ${res.username}\nTemporary password: ${res.temporary_password}`);
+    await loadTransportAdmin();
+  }catch(err){
+    q("#driver-form-error").textContent=err.message;
+  }finally{
+    submitBtn.disabled=false;
+  }
+};
+wireAdminDeleteList("#route-list","deleteRoute",id=>`/transportation/routes/${id}/`,loadTransportAdmin,"Delete this route?");
+wireAdminDeleteList("#bus-list","deleteBus",id=>`/transportation/buses/${id}/`,loadTransportAdmin,"Delete this bus?");
+wireAdminDeleteList("#driver-list","deleteDriver",id=>`/transportation/drivers/${id}/`,loadTransportAdmin,"Remove this driver record? (Their login account stays.)");
+
+/* ---------- Inventory admin ---------- */
+let allAssets=[];
+
+async function loadInventoryAdmin(){
+  const target=q("#asset-list");if(!target)return;
+  const session=getAdminSession();if(!session)return;
+  try{
+    const res=await api("/inventory/assets/",{token:session.token});
+    allAssets=res.results||res;
+    renderAssets();
+  }catch(err){
+    target.innerHTML=`<p class="muted-note">Could not load assets: ${err.message}</p>`;
+  }
+}
+function renderAssets(){
+  const target=q("#asset-list");if(!target)return;
+  target.innerHTML=allAssets.length?allAssets.map(a=>`<article class="admin-application"><div><h3>${a.name}</h3><p>${a.asset_code} · ${a.asset_type.replace("_"," ")} · ${a.status.replace("_"," ")}${a.location?" · "+a.location:""}</p></div><div class="decision-actions"><button class="reject-button" data-delete-asset="${a.id}">Delete</button></div></article>`).join(""):`<p class="muted-note">No assets recorded yet.</p>`;
+}
+wireAdminForm("#asset-form","/inventory/assets/",d=>({asset_code:d.get("asset_code"),name:d.get("name"),asset_type:d.get("asset_type"),status:d.get("status"),location:d.get("location")||"",purchase_cost:d.get("purchase_cost")||null}),"#asset-form-error",loadInventoryAdmin);
+wireAdminDeleteList("#asset-list","deleteAsset",id=>`/inventory/assets/${id}/`,loadInventoryAdmin,"Delete this asset record?");

@@ -43,7 +43,12 @@ class Book(models.Model):
         return f"{self.title} by {self.author}"
     
     def save(self, *args, **kwargs):
-        if not self.available_copies:
+        # Default available_copies to total_copies on first creation only.
+        # The old `if not self.available_copies` check used zero as a proxy
+        # for "unset", which silently reset a fully-checked-out book (0
+        # available, a legitimate value) back to full stock on every save —
+        # verified this let checkouts succeed with no copies left at all.
+        if self.pk is None and self.available_copies is None:
             self.available_copies = self.total_copies
         super().save(*args, **kwargs)
 
