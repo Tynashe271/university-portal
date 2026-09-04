@@ -6,6 +6,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from .emails import send_application_confirmation_email
 from .models import AdmissionApplication, MeritList
+from .pdf import generate_acceptance_letter
 from .serializers import AdmissionApplicationSerializer, MeritListSerializer
 
 
@@ -55,7 +56,7 @@ class AdmissionApplicationViewSet(viewsets.ModelViewSet):
         password = request.data.get('password', '')
         if not application or not application.portal_password or not check_password(password, application.portal_password):
             return Response({'error': 'Application reference or password is incorrect.'}, status=status.HTTP_401_UNAUTHORIZED)
-        return Response(AdmissionApplicationSerializer(application).data)
+        return Response(AdmissionApplicationSerializer(application, context={'request': request}).data)
 
     @action(detail=True, methods=['post'])
     def submit(self, request, application_number=None):
@@ -72,7 +73,10 @@ class AdmissionApplicationViewSet(viewsets.ModelViewSet):
         application.reviewed_by = request.user
         application.reviewed_date = timezone.now()
         application.save()
-        return Response({'status': 'approved'})
+        # Generate the PDF acceptance letter so it's ready to download from
+        # the applicant portal as soon as the applicant checks their status.
+        letter_generated = generate_acceptance_letter(application)
+        return Response({'status': 'approved', 'acceptance_letter_generated': letter_generated})
 
     @action(detail=True, methods=['post'])
     def reject(self, request, application_number=None):
