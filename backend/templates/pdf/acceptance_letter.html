@@ -38,6 +38,7 @@
     <tr><td>Applicant</td><td>{{ application.student_name }}</td></tr>
     <tr><td>Grade / level</td><td>{{ grade_label }}</td></tr>
     <tr><td>Academic year</td><td>{{ application.academic_year }}</td></tr>
+    {% if application.assigned_class %}<tr><td>Class</td><td>{{ application.assigned_class }}</td></tr>{% endif %}
     <tr><td>Application reference</td><td>{{ application.application_number }}</td></tr>
   </table>
 

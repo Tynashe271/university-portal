@@ -79,6 +79,13 @@ class AdmissionApplication(models.Model):
     rank = models.IntegerField(null=True, blank=True)
     admission_letter = models.FileField(upload_to=upload_to, blank=True)
     fee_quotation = models.FileField(upload_to=upload_to, blank=True)
+
+    # Points-based class placement (Form 1 only — see admissions/classing.py).
+    # `points` is entered by admissions staff when they accept the
+    # application; `assigned_class` is what the system placed them into
+    # (e.g. "1-2"), left blank for applications with no points scheme.
+    points = models.PositiveIntegerField(null=True, blank=True)
+    assigned_class = models.CharField(max_length=10, blank=True)
     
     # Additional Documents
     birth_certificate = models.FileField(upload_to=upload_to, blank=True)
