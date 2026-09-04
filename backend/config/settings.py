@@ -12,9 +12,14 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 import os
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Local secrets (SMTP credentials, etc.) live in a gitignored .env file next
+# to manage.py — see .env.example for what it can contain.
+load_dotenv(BASE_DIR / '.env')
 
 # Create logs directory if it doesn't exist
 LOGS_DIR = BASE_DIR / 'logs'
@@ -96,7 +101,7 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -180,17 +185,25 @@ REST_FRAMEWORK = {
     'EXCEPTION_HANDLER': 'config.exceptions.custom_exception_handler',
 }
 
-# Email settings (configure for production)
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'  # For development
-EMAIL_HOST = 'smtp.gmail.com'  # Configure for production
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'your-email@example.com'  # Configure for production
-EMAIL_HOST_PASSWORD = 'your-password'  # Configure for production
-DEFAULT_FROM_EMAIL = 'noreply@universityportal.com'  # Configure for production
+# Email settings. Set EMAIL_HOST_USER / EMAIL_HOST_PASSWORD in a local .env
+# file (see .env.example) to send real email via SMTP; with either unset,
+# emails are printed to the console instead so a fresh dev setup never
+# fails just because mail isn't configured yet.
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+EMAIL_BACKEND = (
+    'django.core.mail.backends.smtp.EmailBackend'
+    if EMAIL_HOST_USER and EMAIL_HOST_PASSWORD
+    else 'django.core.mail.backends.console.EmailBackend'
+)
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'true').lower() != 'false'
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL') or EMAIL_HOST_USER or 'noreply@anyschool.example'
 
-# Frontend URL for email verification links
-FRONTEND_URL = 'http://localhost:3000'  # Configure for production
+# Where the frontend is served — used to build links (applicant portal,
+# email verification) inside emails.
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5500')
 
 # Password reset settings
 DJANGO_REST_PASSWORDRESET = {

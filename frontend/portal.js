@@ -111,6 +111,10 @@ if(appForm){
       appForm.hidden=true;q(".form-heading").hidden=true;
       q("#application-complete").hidden=false;
       q("#application-reference").textContent=application.application_number;
+      const note=q("#email-status");
+      if(note)note.textContent=application.email_sent
+        ?`A confirmation email with this reference has been sent to ${d.email}.`
+        :"We could not send a confirmation email, but your reference number above still works — save it.";
     }catch(err){
       q("#save-note").textContent="";
       alert("We could not submit your application: "+err.message);

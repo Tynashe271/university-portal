@@ -4,6 +4,7 @@ from django.utils import timezone
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from .emails import send_application_confirmation_email
 from .models import AdmissionApplication, MeritList
 from .serializers import AdmissionApplicationSerializer, MeritListSerializer
 
@@ -34,6 +35,16 @@ class AdmissionApplicationViewSet(viewsets.ModelViewSet):
         if self.action in ('create', 'login'):
             return [permissions.AllowAny()]
         return [IsAdmissionsAdmin()]
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        application = serializer.save()
+        email_sent = send_application_confirmation_email(application)
+        data = dict(serializer.data)
+        data['email_sent'] = email_sent
+        headers = self.get_success_headers(serializer.data)
+        return Response(data, status=status.HTTP_201_CREATED, headers=headers)
 
     @action(detail=True, methods=['post'])
     def login(self, request, application_number=None):

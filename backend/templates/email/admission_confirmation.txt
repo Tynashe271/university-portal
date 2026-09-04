@@ -1,0 +1,19 @@
+Application received
+
+Dear {{ application.parent_name }},
+
+Thank you for applying to Anyschool High School on behalf of {{ application.student_name }}. Your application has been received and is now under review.
+
+Your application reference number is: {{ application.application_number }}
+
+Student: {{ application.student_name }}
+Applying for: {{ grade_label }} ({{ application.academic_year }})
+Submitted: {{ application.created_at|date:"j F Y, H:i" }}
+
+To track your application status, sign in to the applicant portal with this reference number and the portal password you created on the application form:
+
+{{ portal_url }}
+
+If you did not submit this application, please contact the school office.
+
+Anyschool High School - Admissions Office

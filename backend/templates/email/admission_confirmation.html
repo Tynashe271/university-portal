@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Application received</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+        .reference {
+            display: inline-block;
+            font-size: 20px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            background-color: #eaf2fb;
+            color: #1a4d8f;
+            padding: 10px 18px;
+            border-radius: 6px;
+            margin: 10px 0 20px;
+        }
+        table.details { width: 100%; border-collapse: collapse; margin: 10px 0 20px; }
+        table.details td { padding: 6px 0; border-bottom: 1px solid #e6e6e6; }
+        table.details td:first-child { color: #7f8c8d; width: 40%; }
+        .button {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        .button:hover {
+            background-color: #2980b9;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            font-size: 12px;
+            color: #7f8c8d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Application received</h1>
+
+        <p>Dear {{ application.parent_name }},</p>
+
+        <p>Thank you for applying to Anyschool High School on behalf of {{ application.student_name }}. Your application has been received and is now under review.</p>
+
+        <p>Your application reference number is:</p>
+        <div class="reference">{{ application.application_number }}</div>
+
+        <table class="details">
+            <tr><td>Student</td><td>{{ application.student_name }}</td></tr>
+            <tr><td>Applying for</td><td>{{ grade_label }} &middot; {{ application.academic_year }}</td></tr>
+            <tr><td>Submitted</td><td>{{ application.created_at|date:"j F Y, H:i" }}</td></tr>
+        </table>
+
+        <p>To track your application status, sign in to the applicant portal with this reference number and the portal password you created on the application form:</p>
+
+        <a href="{{ portal_url }}" class="button">Open the applicant portal</a>
+
+        <p>If the button doesn't work, copy and paste this link into your browser:</p>
+        <p>{{ portal_url }}</p>
+
+        <div class="footer">
+            <p>Anyschool High School &middot; Admissions Office</p>
+            <p>If you did not submit this application, please contact the school office.</p>
+        </div>
+    </div>
+</body>
+</html>
