@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import AdminPermission, SystemLog
+from .models import AdminPermission, SystemLog, SchoolSettings
 from students.models import User
 
 class AdminPermissionSerializer(serializers.ModelSerializer):
@@ -13,9 +13,16 @@ class AdminPermissionSerializer(serializers.ModelSerializer):
 
 class SystemLogSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username', read_only=True)
-    
+
     class Meta:
         model = SystemLog
-        fields = ['id', 'action', 'user', 'username', 'model_name', 'object_id', 
+        fields = ['id', 'action', 'user', 'username', 'model_name', 'object_id',
                   'description', 'ip_address', 'timestamp']
         read_only_fields = ['id', 'timestamp']
+
+
+class SchoolSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SchoolSettings
+        fields = ['school_name', 'motto', 'address', 'phone', 'email', 'current_academic_year', 'updated_at']
+        read_only_fields = ['updated_at']
