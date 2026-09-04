@@ -1,0 +1,43 @@
+# --- Backend (Django) ---
+backend/**/__pycache__/
+backend/*.pyc
+backend/*.pyo
+backend/*.pyd
+backend/db.sqlite3
+backend/db.sqlite3-journal
+backend/*.log
+backend/logs/
+backend/local_settings.py
+/backend/media
+/backend/staticfiles
+/backend/static
+backend/venv/
+backend/.venv/
+backend/env/
+backend/ENV/
+backend/*.egg-info/
+
+# --- Frontend (static site) ---
+frontend/dist/
+frontend/*.tar.gz
+frontend/.agents/
+frontend/chongogwe_high_application/
+frontend/skills-lock.json
+
+# --- IDE / OS (repo-wide) ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# --- Env / secrets ---
+.env
+.env.local
+
+# --- Testing ---
+.pytest_cache/
+.coverage
+htmlcov/
