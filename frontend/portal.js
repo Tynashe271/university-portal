@@ -281,6 +281,7 @@ async function loadAdmin(){
   }catch(err){
     target.innerHTML=`<p class="muted-note">Could not load applications: ${err.message}</p>`;
   }
+  loadAdminNews();
 }
 
 function renderAdminList(){
@@ -309,6 +310,71 @@ q("#admin-applications")?.addEventListener("click",async e=>{
 });
 q("#admin-logout")?.addEventListener("click",()=>{sessionStorage.removeItem(adminSessionStorageKey);location.reload()});
 q("#admin-search")?.addEventListener("input",renderAdminList);
+
+/* ---------- News & events admin ---------- */
+let allNewsPosts=[];
+const newsForm=q("#news-form");
+
+async function loadAdminNews(){
+  const target=q("#admin-news-list");if(!target)return;
+  const session=getAdminSession();if(!session)return;
+  target.innerHTML=`<p class="muted-note">Loading…</p>`;
+  try{
+    const res=await api("/news/posts/?page_size=100",{token:session.token});
+    allNewsPosts=res.results||res;
+    renderAdminNews();
+  }catch(err){
+    target.innerHTML=`<p class="muted-note">Could not load news & events: ${err.message}</p>`;
+  }
+}
+
+function renderAdminNews(){
+  const target=q("#admin-news-list");if(!target)return;
+  if(!allNewsPosts.length){target.innerHTML=`<div class="empty-state small-empty"><h2>No posts yet</h2><p>Add the school's first news update or event above.</p></div>`;return}
+  target.innerHTML=allNewsPosts.map(p=>`<article class="admin-application"><div><span class="decision-status ${p.category==="event"?"under-review":"accepted"}">${p.category==="event"?"Event":"News"}</span><h3>${p.title}</h3><p>${p.published?"Published":"Draft"}${p.event_date?" · "+new Date(p.event_date).toLocaleString():""}${p.location?" · "+p.location:""}</p></div><div class="decision-actions"><button class="reject-button" data-delete-news="${p.id}">Delete</button></div></article>`).join("");
+}
+
+if(newsForm)newsForm.onsubmit=async e=>{
+  e.preventDefault();
+  const session=getAdminSession();if(!session)return;
+  const d=new FormData(newsForm);
+  q("#news-form-error").textContent="";
+  const payload={
+    title:d.get("title"),
+    category:d.get("category"),
+    summary:d.get("summary"),
+    body:d.get("body")||"",
+    location:d.get("location")||"",
+    published:d.get("published")==="on",
+  };
+  if(d.get("event_date"))payload.event_date=new Date(d.get("event_date")).toISOString();
+  const submitBtn=newsForm.querySelector('button[type="submit"]');
+  submitBtn.disabled=true;
+  try{
+    await api("/news/posts/",{method:"POST",body:payload,token:session.token});
+    newsForm.reset();
+    await loadAdminNews();
+  }catch(err){
+    q("#news-form-error").textContent=err.message;
+  }finally{
+    submitBtn.disabled=false;
+  }
+};
+
+q("#admin-news-list")?.addEventListener("click",async e=>{
+  const id=e.target.dataset.deleteNews;
+  if(!id)return;
+  if(!confirm("Delete this post? This cannot be undone."))return;
+  const session=getAdminSession();if(!session)return;
+  e.target.disabled=true;
+  try{
+    await api(`/news/posts/${id}/`,{method:"DELETE",token:session.token});
+    await loadAdminNews();
+  }catch(err){
+    alert("Could not delete post: "+err.message);
+    e.target.disabled=false;
+  }
+});
 
 /* ---------- Applicant status portal ---------- */
 function renderApplicant(app){
