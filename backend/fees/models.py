@@ -19,26 +19,22 @@ class FeeStructure(models.Model):
         ('other', 'Other'),
     ]
     
+    # Matches admissions.AdmissionApplication.GRADE_LEVEL_CHOICES — this
+    # school runs Form 1-6, not a Grade 1-12/Kindergarten system.
     GRADE_LEVEL_CHOICES = [
-        ('KG', 'Kindergarten'),
-        ('1', 'Grade 1'),
-        ('2', 'Grade 2'),
-        ('3', 'Grade 3'),
-        ('4', 'Grade 4'),
-        ('5', 'Grade 5'),
-        ('6', 'Grade 6'),
-        ('7', 'Grade 7'),
-        ('8', 'Grade 8'),
-        ('9', 'Grade 9'),
-        ('10', 'Grade 10'),
-        ('11', 'Grade 11'),
-        ('12', 'Grade 12'),
+        ('form1', 'Form 1'),
+        ('form2', 'Form 2'),
+        ('form3', 'Form 3'),
+        ('form4', 'Form 4'),
+        ('lower6', 'Lower 6'),
+        ('upper6', 'Upper 6'),
     ]
-    
+
     ACADEMIC_YEAR_CHOICES = [
         ('2024-2025', '2024-2025'),
         ('2025-2026', '2025-2026'),
         ('2026-2027', '2026-2027'),
+        ('2027-2028', '2027-2028'),
     ]
     
     name = models.CharField(max_length=200)
@@ -108,7 +104,7 @@ class FeePayment(models.Model):
     amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])
     payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES)
     payment_date = models.DateTimeField(auto_now_add=True)
-    transaction_id = models.CharField(max_length=100, unique=True)
+    transaction_id = models.CharField(max_length=100, unique=True, blank=True)
     status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='pending')
     receipt_number = models.CharField(max_length=50, unique=True)
     receipt_generated = models.BooleanField(default=False)
@@ -123,11 +119,15 @@ class FeePayment(models.Model):
         return f"{self.receipt_number} - {self.amount}"
     
     def save(self, *args, **kwargs):
-        if not self.receipt_number:
+        if not self.receipt_number or not self.transaction_id:
             from django.utils import timezone
+            import uuid
             year = timezone.now().year
             count = FeePayment.objects.filter(payment_date__year=year).count() + 1
-            self.receipt_number = f"RCP{year}{count:06d}"
+            if not self.receipt_number:
+                self.receipt_number = f"RCP{year}{count:06d}"
+            if not self.transaction_id:
+                self.transaction_id = f"TXN{year}{count:06d}{uuid.uuid4().hex[:6].upper()}"
         super().save(*args, **kwargs)
 
 class FeeDiscount(models.Model):

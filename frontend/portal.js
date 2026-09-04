@@ -292,11 +292,12 @@ if(adminLogin)adminLogin.onsubmit=async e=>{
     loadAdminStudents();
     loadTimetableAdmin();
     initAttendancePanel();
+    loadFeesAdmin();
   }catch(err){
     q("#admin-error").textContent=err.message;
   }
 };
-if(adminDash&&getAdminSession()){q("#admin-login").hidden=true;adminDash.hidden=false;loadAdmin();loadAdminOverview();loadAcademics();loadAdminStudents();loadTimetableAdmin();initAttendancePanel()}
+if(adminDash&&getAdminSession()){q("#admin-login").hidden=true;adminDash.hidden=false;loadAdmin();loadAdminOverview();loadAcademics();loadAdminStudents();loadTimetableAdmin();initAttendancePanel();loadFeesAdmin()}
 
 async function loadAdmin(){
   const target=q("#admin-applications");if(!target)return;
@@ -917,3 +918,50 @@ async function loadRecentAttendance(){
     target.innerHTML=`<p class="muted-note">Could not load recent records: ${err.message}</p>`;
   }
 }
+
+/* ---------- Fees & finance admin ---------- */
+const FEE_TYPE_LABELS={tuition:"Tuition",admission:"Admission",transportation:"Transportation",meals:"Meals/Cafeteria",lab:"Laboratory",library:"Library",sports:"Sports",extracurricular:"Extracurricular",technology:"Technology",annual:"Annual",other:"Other"};
+let allFeeStructures=[],allFeeAccounts=[],allFeePayments=[];
+
+async function loadFeesAdmin(){
+  const target=q("#fee-structure-list");if(!target)return;
+  const session=getAdminSession();if(!session)return;
+  try{
+    const [structRes,acctRes,payRes,studentsRes]=await Promise.all([
+      api("/fees/fee-structures/",{token:session.token}),
+      api("/fees/fee-accounts/",{token:session.token}),
+      api("/fees/fee-payments/",{token:session.token}),
+      api("/auth/users/?role=student",{token:session.token}),
+    ]);
+    allFeeStructures=structRes.results||structRes;
+    allFeeAccounts=acctRes.results||acctRes;
+    allFeePayments=payRes.results||payRes;
+    const students=studentsRes.results||studentsRes;
+
+    const studentSelect=q("#fee-account-student-select");
+    if(studentSelect)studentSelect.innerHTML=students.map(s=>`<option value="${s.id}">${(s.first_name||s.last_name)?`${s.first_name} ${s.last_name}`.trim():s.username} (${s.student_id||s.username})</option>`).join("")||`<option value="">No students yet</option>`;
+    const acctSelect=q("#fee-payment-account-select");
+    if(acctSelect)acctSelect.innerHTML=allFeeAccounts.map(a=>`<option value="${a.id}">${a.student_name} · ${a.academic_year} · Due US$ ${a.fees_due}</option>`).join("")||`<option value="">Open a fee account first</option>`;
+
+    renderFeeStructures();renderFeeAccounts();renderFeePayments();
+  }catch(err){
+    target.innerHTML=`<p class="muted-note">Could not load fees: ${err.message}</p>`;
+  }
+}
+function renderFeeStructures(){
+  const target=q("#fee-structure-list");if(!target)return;
+  target.innerHTML=allFeeStructures.length?allFeeStructures.map(f=>`<article class="admin-application"><div><h3>${f.name}</h3><p>${FEE_TYPE_LABELS[f.fee_type]||f.fee_type} · ${GRADE_LABELS_FULL[f.grade_level]||f.grade_level} · ${f.academic_year} · US$ ${f.amount}${f.due_date?" · Due "+f.due_date:""}</p></div><div class="decision-actions"><button class="reject-button" data-delete-feestructure="${f.id}">Delete</button></div></article>`).join(""):`<p class="muted-note">No fee structures yet.</p>`;
+}
+function renderFeeAccounts(){
+  const target=q("#fee-account-list");if(!target)return;
+  target.innerHTML=allFeeAccounts.length?allFeeAccounts.map(a=>`<article class="admin-application"><div><h3>${a.student_name}</h3><p>${a.academic_year} · Total US$ ${a.total_fees} · Paid US$ ${a.fees_paid} · Due US$ ${a.fees_due}</p></div></article>`).join(""):`<p class="muted-note">No fee accounts opened yet.</p>`;
+}
+function renderFeePayments(){
+  const target=q("#fee-payment-list");if(!target)return;
+  target.innerHTML=allFeePayments.length?allFeePayments.map(p=>`<article class="admin-application"><div><h3>${p.student_name}</h3><p>${p.receipt_number} · US$ ${p.amount} · ${p.payment_method.replace("_"," ")} · ${new Date(p.payment_date).toLocaleDateString()}</p></div></article>`).join(""):`<p class="muted-note">No payments recorded yet.</p>`;
+}
+
+wireAdminForm("#fee-structure-form","/fees/fee-structures/",d=>({name:d.get("name"),fee_type:d.get("fee_type"),grade_level:d.get("grade_level"),academic_year:d.get("academic_year"),amount:d.get("amount"),due_date:d.get("due_date")||null}),"#fee-structure-form-error",loadFeesAdmin);
+wireAdminForm("#fee-account-form","/fees/fee-accounts/",d=>({student:d.get("student"),academic_year:d.get("academic_year"),total_fees:d.get("total_fees")}),"#fee-account-form-error",loadFeesAdmin);
+wireAdminForm("#fee-payment-form","/fees/fee-payments/",d=>({fee_account:d.get("fee_account"),amount:d.get("amount"),payment_method:d.get("payment_method"),notes:d.get("notes")||""}),"#fee-payment-form-error",loadFeesAdmin);
+wireAdminDeleteList("#fee-structure-list","deleteFeestructure",id=>`/fees/fee-structures/${id}/`,loadFeesAdmin,"Delete this fee structure?");
