@@ -290,11 +290,13 @@ if(adminLogin)adminLogin.onsubmit=async e=>{
     loadAdminOverview();
     loadAcademics();
     loadAdminStudents();
+    loadTimetableAdmin();
+    initAttendancePanel();
   }catch(err){
     q("#admin-error").textContent=err.message;
   }
 };
-if(adminDash&&getAdminSession()){q("#admin-login").hidden=true;adminDash.hidden=false;loadAdmin();loadAdminOverview();loadAcademics();loadAdminStudents()}
+if(adminDash&&getAdminSession()){q("#admin-login").hidden=true;adminDash.hidden=false;loadAdmin();loadAdminOverview();loadAcademics();loadAdminStudents();loadTimetableAdmin();initAttendancePanel()}
 
 async function loadAdmin(){
   const target=q("#admin-applications");if(!target)return;
@@ -787,3 +789,131 @@ q("#pending-conversions")?.addEventListener("click",async e=>{
     e.target.disabled=false;
   }
 });
+
+/* ---------- Timetable admin ---------- */
+const DAY_LABELS={monday:"Monday",tuesday:"Tuesday",wednesday:"Wednesday",thursday:"Thursday",friday:"Friday",saturday:"Saturday",sunday:"Sunday"};
+let allTimeSlots=[],allPeriods=[];
+
+async function loadTimetableAdmin(){
+  const target=q("#timeslot-list");if(!target)return;
+  const session=getAdminSession();if(!session)return;
+  try{
+    const [slotsRes,periodsRes,roomsRes,subjRes,staffRes]=await Promise.all([
+      api("/schedule/time-slots/",{token:session.token}),
+      api("/schedule/periods/",{token:session.token}),
+      api("/academics/classrooms/",{token:session.token}),
+      api("/academics/subjects/",{token:session.token}),
+      api("/staff/staff-profiles/?page_size=500",{token:session.token}),
+    ]);
+    allTimeSlots=slotsRes.results||slotsRes;
+    allPeriods=periodsRes.results||periodsRes;
+    const rooms=roomsRes.results||roomsRes;
+    const subjects=subjRes.results||subjRes;
+    const teachers=(staffRes.results||staffRes).filter(s=>["permanent_teacher","student_teacher"].includes(s.employee_type));
+
+    const slotSelect=q("#period-timeslot-select");
+    if(slotSelect)slotSelect.innerHTML=allTimeSlots.map(t=>`<option value="${t.id}">${DAY_LABELS[t.day]||t.day} ${t.start_time.slice(0,5)}-${t.end_time.slice(0,5)}</option>`).join("")||`<option value="">Add a time slot first</option>`;
+    const classroomSelect=q("#period-classroom-select");
+    if(classroomSelect)classroomSelect.innerHTML=rooms.map(c=>`<option value="${c.id}">${c.name} (${c.academic_year})</option>`).join("")||`<option value="">Add a classroom first</option>`;
+    const subjectSelect=q("#period-subject-select");
+    if(subjectSelect)subjectSelect.innerHTML=subjects.map(s=>`<option value="${s.id}">${s.name}</option>`).join("")||`<option value="">Add a subject first</option>`;
+    const teacherSelect=q("#period-teacher-select");
+    if(teacherSelect)teacherSelect.innerHTML=`<option value="">— none —</option>`+teachers.map(s=>`<option value="${s.id}">${s.display_name}</option>`).join("");
+
+    renderTimeSlots();renderPeriods();
+  }catch(err){
+    target.innerHTML=`<p class="muted-note">Could not load the timetable: ${err.message}</p>`;
+  }
+}
+function renderTimeSlots(){
+  const target=q("#timeslot-list");if(!target)return;
+  target.innerHTML=allTimeSlots.length?allTimeSlots.map(t=>`<article class="admin-application"><div><h3>${DAY_LABELS[t.day]||t.day}</h3><p>${t.start_time.slice(0,5)} – ${t.end_time.slice(0,5)}</p></div><div class="decision-actions"><button class="reject-button" data-delete-timeslot="${t.id}">Delete</button></div></article>`).join(""):`<p class="muted-note">No time slots yet.</p>`;
+}
+function renderPeriods(){
+  const target=q("#period-list");if(!target)return;
+  target.innerHTML=allPeriods.length?allPeriods.map(p=>`<article class="admin-application"><div><h3>${p.classroom_name} · ${p.subject_name}</h3><p>${DAY_LABELS[p.time_slot_details.day]||p.time_slot_details.day} ${p.time_slot_details.start_time.slice(0,5)}-${p.time_slot_details.end_time.slice(0,5)} · ${p.teacher_name||"No teacher assigned"}${p.room?" · "+p.room:""}</p></div><div class="decision-actions"><button class="reject-button" data-delete-period="${p.id}">Delete</button></div></article>`).join(""):`<p class="muted-note">No periods scheduled yet.</p>`;
+}
+
+wireAdminForm("#timeslot-form","/schedule/time-slots/",d=>({day:d.get("day"),start_time:d.get("start_time"),end_time:d.get("end_time")}),"#timeslot-form-error",loadTimetableAdmin);
+wireAdminForm("#period-form","/schedule/periods/",d=>({classroom:d.get("classroom"),subject:d.get("subject"),teacher:d.get("teacher")||null,time_slot:d.get("time_slot"),room:d.get("room")||"",academic_year:d.get("academic_year")}),"#period-form-error",loadTimetableAdmin);
+wireAdminDeleteList("#timeslot-list","deleteTimeslot",id=>`/schedule/time-slots/${id}/`,loadTimetableAdmin,"Delete this time slot? Periods using it will need to be removed too.");
+wireAdminDeleteList("#period-list","deletePeriod",id=>`/schedule/periods/${id}/`,loadTimetableAdmin,"Delete this class period?");
+
+/* ---------- Attendance admin ---------- */
+async function initAttendancePanel(){
+  const select=q("#attendance-classroom-select");if(!select)return;
+  const session=getAdminSession();if(!session)return;
+  try{
+    const res=await api("/academics/classrooms/",{token:session.token});
+    const rooms=res.results||res;
+    select.innerHTML=`<option value="">Select a classroom…</option>`+rooms.map(c=>`<option value="${c.id}">${c.name} (${c.academic_year})</option>`).join("");
+  }catch{
+    select.innerHTML=`<option value="">Could not load classrooms</option>`;
+  }
+  const dateInput=q("#attendance-date");
+  if(dateInput&&!dateInput.value)dateInput.value=new Date().toISOString().slice(0,10);
+  loadRecentAttendance();
+}
+
+q("#attendance-load-form")?.addEventListener("submit",async e=>{
+  e.preventDefault();
+  const session=getAdminSession();if(!session)return;
+  const classroomId=q("#attendance-classroom-select").value;
+  const date=q("#attendance-date").value;
+  if(!classroomId||!date)return;
+  const target=q("#attendance-register");
+  target.innerHTML=`<p class="muted-note">Loading…</p>`;
+  try{
+    const [studentsRes,existingRes]=await Promise.all([
+      api("/auth/users/?role=student",{token:session.token}),
+      api(`/attendance/daily/?date=${date}&classroom=${classroomId}`,{token:session.token}),
+    ]);
+    const roster=(studentsRes.results||studentsRes).filter(s=>String(s.classroom)===String(classroomId));
+    const existing=existingRes.results||existingRes;
+    const existingByStudent={};
+    existing.forEach(r=>existingByStudent[r.student]=r);
+    if(!roster.length){target.innerHTML=`<p class="muted-note">No students are placed in this classroom yet.</p>`;return}
+    target.innerHTML=`<div class="attendance-rows">${roster.map(s=>{
+      const mark=existingByStudent[s.id];
+      const name=(s.first_name||s.last_name)?`${s.first_name} ${s.last_name}`.trim():s.username;
+      return `<div class="attendance-row" data-student="${s.id}"><span>${name} <small>${s.student_id||s.username}</small></span><select class="attendance-status"><option value="present"${!mark||mark.status==="present"?" selected":""}>Present</option><option value="absent"${mark&&mark.status==="absent"?" selected":""}>Absent</option><option value="late"${mark&&mark.status==="late"?" selected":""}>Late</option><option value="excused"${mark&&mark.status==="excused"?" selected":""}>Excused</option></select><input class="attendance-reason" placeholder="Reason (optional)" value="${mark?mark.reason:""}"></div>`;
+    }).join("")}</div><div class="attendance-actions"><button class="primary-button" id="save-register" type="button">Save register</button><p id="attendance-form-error" class="form-error"></p></div>`;
+  }catch(err){
+    target.innerHTML=`<p class="muted-note">Could not load the register: ${err.message}</p>`;
+  }
+});
+
+q("#attendance-register")?.addEventListener("click",async e=>{
+  if(e.target.id!=="save-register")return;
+  const session=getAdminSession();if(!session)return;
+  const classroomId=q("#attendance-classroom-select").value;
+  const date=q("#attendance-date").value;
+  const entries=qa(".attendance-row").map(row=>({
+    student:row.dataset.student,
+    status:row.querySelector(".attendance-status").value,
+    reason:row.querySelector(".attendance-reason").value,
+  }));
+  e.target.disabled=true;
+  try{
+    const res=await api("/attendance/daily/bulk_mark/",{method:"POST",body:{classroom:classroomId,date,entries},token:session.token});
+    q("#attendance-form-error").textContent="";
+    alert(`Register saved for ${res.marked} student${res.marked===1?"":"s"}.`);
+    loadRecentAttendance();
+  }catch(err){
+    q("#attendance-form-error").textContent=err.message;
+  }finally{
+    e.target.disabled=false;
+  }
+});
+
+async function loadRecentAttendance(){
+  const target=q("#attendance-recent");if(!target)return;
+  const session=getAdminSession();if(!session)return;
+  try{
+    const res=await api("/attendance/daily/?page_size=20",{token:session.token});
+    const records=res.results||res;
+    target.innerHTML=records.length?records.map(r=>`<p><strong>${r.student_name}</strong><small>${r.date} · ${r.status[0].toUpperCase()+r.status.slice(1)}${r.reason?" · "+r.reason:""}</small></p>`).join(""):`<p class="muted-note">No attendance recorded yet.</p>`;
+  }catch(err){
+    target.innerHTML=`<p class="muted-note">Could not load recent records: ${err.message}</p>`;
+  }
+}

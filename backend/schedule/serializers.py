@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import TimeSlot, Schedule, Timetable, ClassConflict
+from .models import TimeSlot, Schedule, Timetable, ClassConflict, ClassPeriod
 
 class TimeSlotSerializer(serializers.ModelSerializer):
     class Meta:
@@ -52,6 +52,47 @@ class TimetableSerializer(serializers.ModelSerializer):
             schedules = schedules.filter(instructor=user)
         
         return ScheduleSerializer(schedules, many=True).data
+
+class ClassPeriodSerializer(serializers.ModelSerializer):
+    classroom_name = serializers.CharField(source='classroom.name', read_only=True)
+    subject_name = serializers.CharField(source='subject.name', read_only=True)
+    teacher_name = serializers.CharField(source='teacher.name', read_only=True, default=None)
+    time_slot_details = TimeSlotSerializer(source='time_slot', read_only=True)
+    room = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ClassPeriod
+        fields = ['id', 'classroom', 'classroom_name', 'subject', 'subject_name', 'teacher',
+                  'teacher_name', 'time_slot', 'time_slot_details', 'room', 'academic_year']
+        read_only_fields = ['id']
+
+    def get_room(self, obj):
+        return obj.effective_room()
+
+    def validate(self, data):
+        classroom = data.get('classroom', getattr(self.instance, 'classroom', None))
+        teacher = data.get('teacher', getattr(self.instance, 'teacher', None))
+        time_slot = data.get('time_slot', getattr(self.instance, 'time_slot', None))
+        academic_year = data.get('academic_year', getattr(self.instance, 'academic_year', None))
+
+        # A teacher can't be in two classrooms during the same time slot —
+        # the DB's unique_together only stops a classroom double-booking
+        # itself, not a shared teacher, so that's checked here instead.
+        if teacher and time_slot and academic_year:
+            clash = ClassPeriod.objects.filter(
+                teacher=teacher, time_slot=time_slot, academic_year=academic_year
+            )
+            if self.instance:
+                clash = clash.exclude(pk=self.instance.pk)
+            if classroom:
+                clash = clash.exclude(classroom=classroom)
+            existing = clash.first()
+            if existing:
+                raise serializers.ValidationError(
+                    f"{teacher.name()} is already teaching {existing.classroom.name} at this time."
+                )
+        return data
+
 
 class ClassConflictSerializer(serializers.ModelSerializer):
     schedule1_details = ScheduleSerializer(source='schedule1', read_only=True)
