@@ -468,6 +468,8 @@ function renderApplicant(app){
     "The admissions team is reviewing your information.";
   q("#submitted-date").textContent=new Date(app.submitted_date||app.created_at).toLocaleDateString();
   q("#applicant-details").innerHTML=`<p><span>Applying for</span><strong>${GRADE_LABELS[app.grade_applying_for]||app.grade_applying_for}</strong></p><p><span>Academic year</span><strong>${app.academic_year}</strong></p><p><span>Previous school</span><strong>${app.previous_school||"—"}</strong></p><p><span>Guardian</span><strong>${app.parent_name}</strong></p>`;
+  const letterLink=q("#acceptance-letter-link");
+  if(letterLink)if(app.admission_letter){letterLink.href=app.admission_letter;letterLink.hidden=false}else{letterLink.hidden=true}
 }
 
 q("#applicant-login-form")?.addEventListener("submit",async e=>{

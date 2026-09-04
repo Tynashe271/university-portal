@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 2.5cm 2.2cm; }
+  body { font-family: Helvetica, Arial, sans-serif; color: #1a1a1a; font-size: 11pt; line-height: 1.5; }
+  .letterhead { border-bottom: 3px solid #13263f; padding-bottom: 14px; margin-bottom: 24px; }
+  .school-name { font-size: 20pt; font-weight: bold; color: #13263f; }
+  .school-tag { font-size: 9pt; color: #6c757d; margin-top: 2px; }
+  .meta { text-align: right; font-size: 9pt; color: #6c757d; margin-bottom: 20px; }
+  .ref-box { background-color: #eaf2fb; color: #1a4d8f; padding: 6px 12px; font-weight: bold; font-size: 10pt; margin-bottom: 18px; }
+  h1 { font-size: 15pt; color: #13263f; margin: 20px 0 12px; }
+  p { margin: 0 0 12px; }
+  table.offer { width: 100%; border-collapse: collapse; margin: 16px 0 20px; }
+  table.offer td { padding: 6px 0; border-bottom: 1px solid #e5e9ee; font-size: 10pt; }
+  table.offer td:first-child { color: #6c757d; width: 40%; }
+  .signature { margin-top: 46px; }
+  .signature .line { border-top: 1px solid #333; width: 220px; margin-top: 40px; padding-top: 6px; font-size: 9pt; color: #6c757d; }
+  .footer-note { margin-top: 30px; font-size: 8pt; color: #9aa4af; border-top: 1px solid #e5e9ee; padding-top: 10px; }
+</style>
+</head>
+<body>
+  <div class="letterhead">
+    <div class="school-name">Anyschool High School</div>
+    <div class="school-tag">Learning with purpose, character and ambition.</div>
+  </div>
+  <div class="meta">{{ issue_date|date:"j F Y" }}</div>
+  <div class="ref-box">Ref: {{ application.application_number }}</div>
+
+  <p>Dear {{ application.parent_name }},</p>
+
+  <h1>Offer of Admission</h1>
+
+  <p>We are delighted to inform you that <strong>{{ application.student_name }}</strong> has been offered a place at Anyschool High School for the {{ application.academic_year }} academic year. This offer follows a review of the application and supporting documents submitted to our admissions office.</p>
+
+  <table class="offer">
+    <tr><td>Applicant</td><td>{{ application.student_name }}</td></tr>
+    <tr><td>Grade / level</td><td>{{ grade_label }}</td></tr>
+    <tr><td>Academic year</td><td>{{ application.academic_year }}</td></tr>
+    <tr><td>Application reference</td><td>{{ application.application_number }}</td></tr>
+  </table>
+
+  <p>To secure this place, please confirm acceptance of the offer and complete the enrolment requirements communicated by our admissions office. Should you have any questions, our admissions team remains available to assist you.</p>
+
+  <p>We look forward to welcoming {{ application.student_name }} to our school community.</p>
+
+  <div class="signature">
+    <p>Yours sincerely,</p>
+    <div class="line">Admissions Office &middot; Anyschool High School</div>
+  </div>
+
+  <div class="footer-note">
+    This letter was generated electronically on {{ issue_date|date:"j F Y, H:i" }} and is valid without a signature. For verification, contact the school office quoting reference {{ application.application_number }}.
+  </div>
+</body>
+</html>
