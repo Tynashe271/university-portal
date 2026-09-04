@@ -90,11 +90,15 @@ class UserListView(generics.ListAPIView):
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = None  # Disable default pagination for this view
-    
+
     def get_queryset(self):
         user = self.request.user
         if user.is_admin_user():
-            return User.objects.all()
+            queryset = User.objects.all()
+            role = self.request.query_params.get('role')
+            if role:
+                queryset = queryset.filter(role=role)
+            return queryset.order_by('-enrollment_date')
         else:
             return User.objects.filter(id=user.id)
 
@@ -102,13 +106,21 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
-    
+
     def get_queryset(self):
         user = self.request.user
         if user.is_admin_user():
             return User.objects.all()
         else:
             return User.objects.filter(id=user.id)
+
+    def perform_destroy(self, instance):
+        # A user may only view/edit their own record via this endpoint (see
+        # get_queryset); deleting an account is admin-only regardless.
+        if not self.request.user.is_admin_user():
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Only admins can delete accounts.")
+        instance.delete()
 
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])

@@ -288,11 +288,13 @@ if(adminLogin)adminLogin.onsubmit=async e=>{
     q("#admin-login").hidden=true;adminDash.hidden=false;
     loadAdmin();
     loadAdminOverview();
+    loadAcademics();
+    loadAdminStudents();
   }catch(err){
     q("#admin-error").textContent=err.message;
   }
 };
-if(adminDash&&getAdminSession()){q("#admin-login").hidden=true;adminDash.hidden=false;loadAdmin();loadAdminOverview()}
+if(adminDash&&getAdminSession()){q("#admin-login").hidden=true;adminDash.hidden=false;loadAdmin();loadAdminOverview();loadAcademics();loadAdminStudents()}
 
 async function loadAdmin(){
   const target=q("#admin-applications");if(!target)return;
@@ -637,3 +639,151 @@ if(q("#applicant-dashboard")){
   }
 }
 q("#applicant-logout")?.addEventListener("click",()=>{sessionStorage.removeItem("active-applicant");location.reload()});
+
+/* ---------- Generic admin CRUD wiring (reused by every simple add-list-
+   delete panel on dashboard-admin.html: academic structure, and more as
+   they get added) ---------- */
+function wireAdminForm(formSelector,endpoint,payloadFn,errorSelector,onSuccess){
+  const form=q(formSelector);
+  if(!form)return;
+  form.onsubmit=async e=>{
+    e.preventDefault();
+    const session=getAdminSession();if(!session)return;
+    const d=new FormData(form);
+    const errEl=q(errorSelector);
+    if(errEl)errEl.textContent="";
+    const submitBtn=form.querySelector('button[type="submit"]');
+    submitBtn.disabled=true;
+    try{
+      await api(endpoint,{method:"POST",body:payloadFn(d),token:session.token});
+      form.reset();
+      await onSuccess();
+    }catch(err){
+      if(errEl)errEl.textContent=err.message;else alert(err.message);
+    }finally{
+      submitBtn.disabled=false;
+    }
+  };
+}
+function wireAdminDeleteList(listSelector,dataKey,endpointFn,onSuccess,confirmText){
+  q(listSelector)?.addEventListener("click",async e=>{
+    const id=e.target.dataset[dataKey];
+    if(!id)return;
+    if(confirmText&&!confirm(confirmText))return;
+    const session=getAdminSession();if(!session)return;
+    e.target.disabled=true;
+    try{
+      await api(endpointFn(id),{method:"DELETE",token:session.token});
+      await onSuccess();
+    }catch(err){
+      alert("Could not delete: "+err.message);
+      e.target.disabled=false;
+    }
+  });
+}
+
+/* ---------- Academic structure admin ---------- */
+const GRADE_LABELS_FULL={form1:"Form 1",form2:"Form 2",form3:"Form 3",form4:"Form 4",lower6:"Lower 6",upper6:"Upper 6"};
+let allDepartments=[],allSubjects=[],allTerms=[],allClassrooms=[];
+
+async function loadAcademics(){
+  const target=q("#department-list");if(!target)return;
+  const session=getAdminSession();if(!session)return;
+  try{
+    const [deps,subs,terms,rooms,staffRes]=await Promise.all([
+      api("/academics/departments/",{token:session.token}),
+      api("/academics/subjects/",{token:session.token}),
+      api("/academics/terms/",{token:session.token}),
+      api("/academics/classrooms/",{token:session.token}),
+      api("/staff/staff-profiles/?page_size=500",{token:session.token}),
+    ]);
+    allDepartments=deps.results||deps;
+    allSubjects=subs.results||subs;
+    allTerms=terms.results||terms;
+    allClassrooms=rooms.results||rooms;
+    const teachers=(staffRes.results||staffRes).filter(s=>["permanent_teacher","student_teacher"].includes(s.employee_type));
+
+    const depSelect=q("#subject-department-select");
+    if(depSelect)depSelect.innerHTML=`<option value="">— none —</option>`+allDepartments.map(d=>`<option value="${d.id}">${d.name}</option>`).join("");
+    const teacherSelect=q("#classroom-teacher-select");
+    if(teacherSelect)teacherSelect.innerHTML=`<option value="">— none —</option>`+teachers.map(s=>`<option value="${s.id}">${s.display_name}</option>`).join("");
+
+    renderDepartments();renderAcademicSubjects();renderTerms();renderClassrooms();
+  }catch(err){
+    target.innerHTML=`<p class="muted-note">Could not load academic structure: ${err.message}</p>`;
+  }
+}
+function renderDepartments(){
+  const target=q("#department-list");if(!target)return;
+  target.innerHTML=allDepartments.length?allDepartments.map(d=>`<article class="admin-application"><div><h3>${d.name}</h3><p>${d.code||"—"}</p></div><div class="decision-actions"><button class="reject-button" data-delete-department="${d.id}">Delete</button></div></article>`).join(""):`<p class="muted-note">No departments yet.</p>`;
+}
+function renderAcademicSubjects(){
+  const target=q("#subject-list");if(!target)return;
+  target.innerHTML=allSubjects.length?allSubjects.map(s=>`<article class="admin-application"><div><h3>${s.name}</h3><p>${s.code||"—"}${s.department_name?" · "+s.department_name:""}${s.compulsory?" · Compulsory":""}</p></div><div class="decision-actions"><button class="reject-button" data-delete-subject="${s.id}">Delete</button></div></article>`).join(""):`<p class="muted-note">No subjects yet.</p>`;
+}
+function renderTerms(){
+  const target=q("#term-list");if(!target)return;
+  target.innerHTML=allTerms.length?allTerms.map(t=>`<article class="admin-application"><div><h3>${t.term_label} ${t.academic_year}${t.is_current?" (current)":""}</h3><p>${new Date(t.start_date).toLocaleDateString()} – ${new Date(t.end_date).toLocaleDateString()}</p></div><div class="decision-actions"><button class="reject-button" data-delete-term="${t.id}">Delete</button></div></article>`).join(""):`<p class="muted-note">No terms yet.</p>`;
+}
+function renderClassrooms(){
+  const target=q("#classroom-list");if(!target)return;
+  target.innerHTML=allClassrooms.length?allClassrooms.map(c=>`<article class="admin-application"><div><h3>${c.name}</h3><p>${c.grade_label} · ${c.academic_year}${c.room?" · "+c.room:""} · ${c.student_count}/${c.capacity} students${c.class_teacher_name?" · "+c.class_teacher_name:""}</p></div><div class="decision-actions"><button class="reject-button" data-delete-classroom="${c.id}">Delete</button></div></article>`).join(""):`<p class="muted-note">No classrooms yet.</p>`;
+}
+
+wireAdminForm("#department-form","/academics/departments/",d=>({name:d.get("name"),code:d.get("code")||""}),"#department-form-error",loadAcademics);
+wireAdminForm("#subject-form","/academics/subjects/",d=>({name:d.get("name"),code:d.get("code")||"",department:d.get("department")||null,compulsory:d.get("compulsory")==="on"}),"#subject-form-error",loadAcademics);
+wireAdminForm("#term-form","/academics/terms/",d=>({academic_year:d.get("academic_year"),term:d.get("term"),start_date:d.get("start_date"),end_date:d.get("end_date"),is_current:d.get("is_current")==="on"}),"#term-form-error",loadAcademics);
+wireAdminForm("#classroom-form","/academics/classrooms/",d=>({grade:d.get("grade"),stream:d.get("stream"),academic_year:d.get("academic_year"),room:d.get("room")||"",capacity:d.get("capacity")||40,class_teacher:d.get("class_teacher")||null}),"#classroom-form-error",loadAcademics);
+
+wireAdminDeleteList("#department-list","deleteDepartment",id=>`/academics/departments/${id}/`,loadAcademics,"Delete this department?");
+wireAdminDeleteList("#subject-list","deleteSubject",id=>`/academics/subjects/${id}/`,loadAcademics,"Delete this subject?");
+wireAdminDeleteList("#term-list","deleteTerm",id=>`/academics/terms/${id}/`,loadAcademics,"Delete this term?");
+wireAdminDeleteList("#classroom-list","deleteClassroom",id=>`/academics/classrooms/${id}/`,loadAcademics,"Delete this classroom? Students already placed in it keep their record but lose the class link.");
+
+/* ---------- Student management admin ---------- */
+let allStudents=[],pendingApplications=[];
+
+async function loadAdminStudents(){
+  const target=q("#student-list");if(!target)return;
+  const session=getAdminSession();if(!session)return;
+  target.innerHTML=`<p class="muted-note">Loading…</p>`;
+  try{
+    const [studentsRes,appsRes]=await Promise.all([
+      api("/auth/users/?role=student",{token:session.token}),
+      api("/admissions/applications/?page_size=200",{token:session.token}),
+    ]);
+    allStudents=studentsRes.results||studentsRes;
+    const applications=appsRes.results||appsRes;
+    pendingApplications=applications.filter(a=>["approved","admitted","enrolled"].includes(a.status)&&!a.has_student_account);
+    renderPendingConversions();
+    renderStudentList();
+  }catch(err){
+    target.innerHTML=`<p class="muted-note">Could not load students: ${err.message}</p>`;
+  }
+}
+function renderPendingConversions(){
+  const target=q("#pending-conversions");if(!target)return;
+  target.innerHTML=pendingApplications.length?pendingApplications.map(a=>`<article class="admin-application"><div><h3>${a.student_name}</h3><p>${a.application_number} · ${GRADE_LABELS_FULL[a.grade_applying_for]||a.grade_applying_for}${a.assigned_class?" · Class "+a.assigned_class:""}</p></div><div class="decision-actions"><button class="accept-button" data-convert="${a.application_number}">Create student account</button></div></article>`).join(""):`<p class="muted-note">No accepted applicants waiting on a student account.</p>`;
+}
+function renderStudentList(){
+  const target=q("#student-list");if(!target)return;
+  const term=(q("#student-search")?.value||"").toLowerCase();
+  const entries=allStudents.filter(s=>`${s.first_name} ${s.last_name} ${s.student_id||""} ${s.username}`.toLowerCase().includes(term));
+  target.innerHTML=entries.length?entries.map(s=>`<article class="admin-application"><div><h3>${(s.first_name||s.last_name)?`${s.first_name} ${s.last_name}`.trim():s.username}</h3><p>${s.student_id||s.username} · ${s.classroom_name?"Class "+s.classroom_name:"No class assigned"} · ${s.student_status[0].toUpperCase()+s.student_status.slice(1)}</p></div></article>`).join(""):`<div class="empty-state small-empty"><h2>No students found</h2><p>Convert an accepted applicant above, or adjust your search.</p></div>`;
+}
+q("#student-search")?.addEventListener("input",renderStudentList);
+
+q("#pending-conversions")?.addEventListener("click",async e=>{
+  const ref=e.target.dataset.convert;
+  if(!ref)return;
+  const session=getAdminSession();if(!session)return;
+  e.target.disabled=true;
+  try{
+    const res=await api(`/admissions/applications/${encodeURIComponent(ref)}/convert_to_student/`,{method:"POST",token:session.token});
+    alert(`Student account created.\n\nUsername: ${res.username}\nTemporary password: ${res.temporary_password}\n\nShare these with the student or parent now — this password is shown only once.`);
+    await loadAdminStudents();
+  }catch(err){
+    alert("Could not create the student account: "+err.message);
+    e.target.disabled=false;
+  }
+});

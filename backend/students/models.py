@@ -15,8 +15,24 @@ class User(AbstractUser):
         ('attendant', 'Attendant'),
     ]
     
+    STUDENT_STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('transferred', 'Transferred'),
+        ('withdrawn', 'Withdrawn'),
+        ('graduated', 'Graduated'),
+    ]
+
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='student')
     student_id = models.CharField(max_length=20, unique=True, blank=True, null=True)
+    student_status = models.CharField(max_length=20, choices=STUDENT_STATUS_CHOICES, default='active')
+    classroom = models.ForeignKey(
+        'academics.Classroom', on_delete=models.SET_NULL, null=True, blank=True, related_name='students'
+    )
+    # Set when this account was created by converting an accepted admission
+    # (see admissions.views.AdmissionApplicationViewSet.convert_to_student).
+    admission_application = models.OneToOneField(
+        'admissions.AdmissionApplication', on_delete=models.SET_NULL, null=True, blank=True, related_name='student_account'
+    )
     phone = models.CharField(max_length=20, blank=True, null=True)
     date_of_birth = models.DateField(blank=True, null=True)
     address = models.TextField(blank=True, null=True)

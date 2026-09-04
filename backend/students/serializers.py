@@ -8,12 +8,19 @@ import re
 User = get_user_model()
 
 class UserSerializer(serializers.ModelSerializer):
+    classroom_name = serializers.CharField(source='classroom.name', read_only=True, default=None)
+    application_number = serializers.CharField(source='admission_application.application_number', read_only=True, default=None)
+
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 
-                  'student_id', 'phone', 'date_of_birth', 'address', 'enrollment_date', 
-                  'profile_picture', 'email_verified']
-        read_only_fields = ['id', 'enrollment_date', 'email_verified']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role',
+                  'student_id', 'phone', 'date_of_birth', 'address', 'enrollment_date',
+                  'profile_picture', 'email_verified', 'student_status', 'classroom',
+                  'classroom_name', 'admission_application', 'application_number',
+                  'blood_group', 'medical_conditions', 'allergies', 'medications',
+                  'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relationship',
+                  'previous_school', 'previous_grade']
+        read_only_fields = ['id', 'enrollment_date', 'email_verified', 'admission_application']
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])

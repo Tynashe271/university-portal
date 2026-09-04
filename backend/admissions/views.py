@@ -128,6 +128,78 @@ class AdmissionApplicationViewSet(viewsets.ModelViewSet):
         })
 
     @action(detail=True, methods=['post'])
+    def convert_to_student(self, request, application_number=None):
+        """Turn an accepted application into a real student account —
+        closes the Admissions -> Student Record step. Best-effort links the
+        new account to a pre-defined academics.Classroom matching the
+        assigned_class string (e.g. "1-2"); leaves it unset if none exists
+        yet, since Classroom records are optional/admin-defined."""
+        application = self.get_object()
+        if application.status not in ('approved', 'admitted', 'enrolled'):
+            return Response(
+                {'error': 'Only an accepted application can be converted into a student account.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if hasattr(application, 'student_account') and application.student_account:
+            return Response(
+                {'error': 'This application already has a student account.', 'username': application.student_account.username},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from django.utils.crypto import get_random_string
+        from academics.models import Classroom
+        from students.models import User
+
+        name_parts = application.student_name.strip().split(' ', 1)
+        first_name = name_parts[0]
+        last_name = name_parts[1] if len(name_parts) > 1 else ''
+
+        year = timezone.now().year
+        count = User.objects.filter(role='student', enrollment_date__year=year).count() + 1
+        student_id = f"STU{year}{count:04d}"
+        raw_password = get_random_string(10)
+
+        classroom = None
+        if application.assigned_class:
+            try:
+                stream = int(application.assigned_class.split('-')[-1])
+                classroom = Classroom.objects.filter(
+                    grade=application.grade_applying_for,
+                    stream=stream,
+                    academic_year=application.academic_year,
+                ).first()
+            except (ValueError, IndexError):
+                classroom = None
+
+        user = User.objects.create_user(
+            username=student_id.lower(),
+            password=raw_password,
+            first_name=first_name,
+            last_name=last_name,
+            email=application.parent_email,
+            role='student',
+            student_id=student_id,
+            date_of_birth=application.date_of_birth,
+            address=application.parent_address,
+            previous_school=application.previous_school,
+            previous_grade=application.previous_grade,
+            emergency_contact_name=application.parent_name,
+            emergency_contact_phone=application.parent_phone,
+            emergency_contact_relationship='Parent/Guardian',
+            classroom=classroom,
+            admission_application=application,
+        )
+        application.status = 'enrolled'
+        application.save()
+
+        return Response({
+            'username': user.username,
+            'student_id': user.student_id,
+            'temporary_password': raw_password,
+            'classroom': classroom.name if classroom else None,
+        }, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'])
     def reject(self, request, application_number=None):
         application = self.get_object()
         application.status = 'rejected'

@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     'assignments',
     'forums',
     'admissions',
+    'academics',
     'news',
     'fees',
     'parent_communication',
