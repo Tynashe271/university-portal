@@ -315,7 +315,7 @@ function renderAdminList(){
   q("#admin-review").textContent=allApplications.filter(a=>["submitted","under_review"].includes(a.status)).length;
   q("#admin-accepted").textContent=allApplications.filter(a=>["approved","admitted","enrolled"].includes(a.status)).length;
   q("#admin-rejected").textContent=allApplications.filter(a=>a.status==="rejected").length;
-  target.innerHTML=entries.length?entries.map(a=>`<article class="admin-application"><div><span class="decision-status ${statusClass(a.status)}">${STATUS_LABELS[a.status]||a.status}</span><h3>${a.student_name}</h3><p>${a.application_number} · ${GRADE_LABELS[a.grade_applying_for]||a.grade_applying_for} · ${a.academic_year}</p></div><div class="decision-actions"><button class="primary-button" data-review="${a.application_number}">Review application</button></div></article>`).join(""):`<div class="empty-state small-empty"><h2>No applications found</h2><p>Submit an application first or change your search.</p></div>`;
+  target.innerHTML=entries.length?entries.map(a=>`<article class="admin-application"><div><span class="decision-status ${statusClass(a.status)}">${STATUS_LABELS[a.status]||a.status}</span><h3>${a.student_name}</h3><p>${a.application_number} · ${GRADE_LABELS[a.grade_applying_for]||a.grade_applying_for} · ${a.academic_year}${a.assigned_class?` · Class ${a.assigned_class}`:""}</p></div><div class="decision-actions"><button class="primary-button" data-review="${a.application_number}">Review application</button></div></article>`).join(""):`<div class="empty-state small-empty"><h2>No applications found</h2><p>Submit an application first or change your search.</p></div>`;
 }
 
 q("#admin-applications")?.addEventListener("click",e=>{
@@ -348,6 +348,8 @@ function openReview(ref){
     ["Parent phone",a.parent_phone],
     ["Address",a.parent_address||"—"],
   ];
+  if(a.points!=null)rows.push(["Points",a.points]);
+  if(a.assigned_class)rows.push(["Assigned class",a.assigned_class]);
   if(a.additional_notes)rows.push(["Notes",a.additional_notes]);
   q("#review-details-grid").innerHTML=rows.map(([label,val])=>`<p><span>${label}</span><strong>${val}</strong></p>`).join("");
   const docs=[
@@ -363,6 +365,9 @@ function openReview(ref){
   const decided=["approved","rejected","admitted","enrolled"].includes(a.status);
   q("#review-accept").hidden=decided;
   q("#review-reject").hidden=decided;
+  // Only Form 1 has a points-based class scheme (see backend/admissions/classing.py).
+  q("#review-points-field").hidden=decided||a.grade_applying_for!=="form1";
+  q("#review-points").value=a.points??"";
   q("#doc-review-modal").hidden=false;
 }
 function closeReview(){q("#doc-review-modal").hidden=true;reviewingRef=null}
@@ -372,11 +377,24 @@ q("#doc-review-modal")?.addEventListener("click",e=>{if(e.target.id==="doc-revie
 async function decideReview(decision){
   if(!reviewingRef)return;
   const session=getAdminSession();if(!session)return;
+  const ref=reviewingRef;
+  const applicant=allApplications.find(x=>x.application_number===ref);
   const btn=decision==="approve"?q("#review-accept"):q("#review-reject");
+  let body;
+  if(decision==="approve"&&!q("#review-points-field").hidden){
+    const points=q("#review-points").value.trim();
+    if(!points){alert("Enter the applicant's points before accepting — it's used to place them in a class.");return}
+    body={points};
+  }
   btn.disabled=true;
   try{
-    await api(`/admissions/applications/${encodeURIComponent(reviewingRef)}/${decision}/`,{method:"POST",token:session.token});
+    const res=await api(`/admissions/applications/${encodeURIComponent(ref)}/${decision}/`,{method:"POST",body,token:session.token});
     closeReview();
+    if(decision==="approve"&&res.status==="rejected"){
+      alert(`${applicant?.student_name||"This applicant"} could not be placed in a class — ${res.reason||"every class for this grade is full"} — so the application was automatically declined instead.`);
+    }else if(res.assigned_class){
+      alert(`Accepted. ${applicant?.student_name||"The applicant"} has been placed in class ${res.assigned_class}.`);
+    }
     await loadAdmin();
   }catch(err){
     alert("Could not update application: "+err.message);
@@ -474,7 +492,7 @@ function renderApplicant(app){
     app.status==="rejected"?"This application was not successful. Contact admissions for guidance.":
     "The admissions team is reviewing your information.";
   q("#submitted-date").textContent=new Date(app.submitted_date||app.created_at).toLocaleDateString();
-  q("#applicant-details").innerHTML=`<p><span>Applying for</span><strong>${GRADE_LABELS[app.grade_applying_for]||app.grade_applying_for}</strong></p><p><span>Academic year</span><strong>${app.academic_year}</strong></p><p><span>Previous school</span><strong>${app.previous_school||"—"}</strong></p><p><span>Guardian</span><strong>${app.parent_name}</strong></p>`;
+  q("#applicant-details").innerHTML=`<p><span>Applying for</span><strong>${GRADE_LABELS[app.grade_applying_for]||app.grade_applying_for}</strong></p><p><span>Academic year</span><strong>${app.academic_year}</strong></p><p><span>Previous school</span><strong>${app.previous_school||"—"}</strong></p><p><span>Guardian</span><strong>${app.parent_name}</strong></p>${app.assigned_class?`<p><span>Class</span><strong>${app.assigned_class}</strong></p>`:""}`;
   const letterLink=q("#acceptance-letter-link");
   if(letterLink)if(app.admission_letter){letterLink.href=app.admission_letter;letterLink.hidden=false}else{letterLink.hidden=true}
 }
