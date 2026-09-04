@@ -217,6 +217,73 @@ class OnlineExamAttempt(models.Model):
     class Meta:
         db_table = 'online_exam_attempts'
         ordering = ['-start_time']
-    
+
     def __str__(self):
         return f"{self.student.username} - {self.online_exam.exam_paper.exam_name}"
+
+
+class Assessment(models.Model):
+    """A test/assignment/exam given to a whole class in a subject — the
+    unit marks are recorded against. Built fresh rather than reusing
+    QuestionBank/ExamPaper above (a full online-exam authoring system with
+    its own hardcoded subject list, unrelated to academics.Subject)."""
+    ASSESSMENT_TYPE_CHOICES = [
+        ('test', 'Test'),
+        ('assignment', 'Assignment'),
+        ('exam', 'Exam'),
+    ]
+
+    name = models.CharField(max_length=200)
+    subject = models.ForeignKey('academics.Subject', on_delete=models.CASCADE, related_name='assessments')
+    classroom = models.ForeignKey('academics.Classroom', on_delete=models.CASCADE, related_name='assessments')
+    term = models.ForeignKey('academics.Term', on_delete=models.SET_NULL, null=True, blank=True, related_name='assessments')
+    assessment_type = models.CharField(max_length=20, choices=ASSESSMENT_TYPE_CHOICES, default='test')
+    max_score = models.PositiveIntegerField(default=100)
+    date = models.DateField()
+    published = models.BooleanField(default=False, help_text="Whether results are released (for a future student/parent results view)")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='assessments_created')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'assessments'
+        ordering = ['-date']
+
+    def __str__(self):
+        return f"{self.name} · {self.classroom.name} · {self.subject.name}"
+
+
+class Mark(models.Model):
+    assessment = models.ForeignKey(Assessment, on_delete=models.CASCADE, related_name='marks')
+    student = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='marks')
+    score = models.DecimalField(max_digits=6, decimal_places=2, validators=[MinValueValidator(0)])
+    comments = models.CharField(max_length=300, blank=True)
+    graded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='marks_graded')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'marks'
+        unique_together = ['assessment', 'student']
+        ordering = ['-score']
+
+    @property
+    def percentage(self):
+        return round(float(self.score) / float(self.assessment.max_score) * 100, 1) if self.assessment.max_score else None
+
+    @property
+    def letter_grade(self):
+        pct = self.percentage
+        if pct is None:
+            return None
+        if pct >= 80:
+            return 'A'
+        if pct >= 70:
+            return 'B'
+        if pct >= 60:
+            return 'C'
+        if pct >= 50:
+            return 'D'
+        return 'F'
+
+    def __str__(self):
+        return f"{self.student.username} - {self.assessment.name}: {self.score}"

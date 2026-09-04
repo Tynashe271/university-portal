@@ -293,11 +293,12 @@ if(adminLogin)adminLogin.onsubmit=async e=>{
     loadTimetableAdmin();
     initAttendancePanel();
     loadFeesAdmin();
+    loadResultsAdmin();
   }catch(err){
     q("#admin-error").textContent=err.message;
   }
 };
-if(adminDash&&getAdminSession()){q("#admin-login").hidden=true;adminDash.hidden=false;loadAdmin();loadAdminOverview();loadAcademics();loadAdminStudents();loadTimetableAdmin();initAttendancePanel();loadFeesAdmin()}
+if(adminDash&&getAdminSession()){q("#admin-login").hidden=true;adminDash.hidden=false;loadAdmin();loadAdminOverview();loadAcademics();loadAdminStudents();loadTimetableAdmin();initAttendancePanel();loadFeesAdmin();loadResultsAdmin()}
 
 async function loadAdmin(){
   const target=q("#admin-applications");if(!target)return;
@@ -965,3 +966,106 @@ wireAdminForm("#fee-structure-form","/fees/fee-structures/",d=>({name:d.get("nam
 wireAdminForm("#fee-account-form","/fees/fee-accounts/",d=>({student:d.get("student"),academic_year:d.get("academic_year"),total_fees:d.get("total_fees")}),"#fee-account-form-error",loadFeesAdmin);
 wireAdminForm("#fee-payment-form","/fees/fee-payments/",d=>({fee_account:d.get("fee_account"),amount:d.get("amount"),payment_method:d.get("payment_method"),notes:d.get("notes")||""}),"#fee-payment-form-error",loadFeesAdmin);
 wireAdminDeleteList("#fee-structure-list","deleteFeestructure",id=>`/fees/fee-structures/${id}/`,loadFeesAdmin,"Delete this fee structure?");
+
+/* ---------- Marks & results admin ---------- */
+let allAssessments=[];
+
+async function loadResultsAdmin(){
+  const target=q("#assessment-list");if(!target)return;
+  const session=getAdminSession();if(!session)return;
+  try{
+    const [assessRes,subjRes,roomsRes,termsRes]=await Promise.all([
+      api("/examinations/assessments/",{token:session.token}),
+      api("/academics/subjects/",{token:session.token}),
+      api("/academics/classrooms/",{token:session.token}),
+      api("/academics/terms/",{token:session.token}),
+    ]);
+    allAssessments=assessRes.results||assessRes;
+    const subjects=subjRes.results||subjRes;
+    const rooms=roomsRes.results||roomsRes;
+    const terms=termsRes.results||termsRes;
+
+    const subjSelect=q("#assessment-subject-select");
+    if(subjSelect)subjSelect.innerHTML=subjects.map(s=>`<option value="${s.id}">${s.name}</option>`).join("")||`<option value="">Add a subject first</option>`;
+    const roomSelect=q("#assessment-classroom-select");
+    if(roomSelect)roomSelect.innerHTML=rooms.map(c=>`<option value="${c.id}">${c.name} (${c.academic_year})</option>`).join("")||`<option value="">Add a classroom first</option>`;
+    const termSelect=q("#assessment-term-select");
+    if(termSelect)termSelect.innerHTML=`<option value="">— none —</option>`+terms.map(t=>`<option value="${t.id}">${t.term_label} ${t.academic_year}</option>`).join("");
+    const markSelect=q("#marks-assessment-select");
+    if(markSelect)markSelect.innerHTML=`<option value="">Select an assessment…</option>`+allAssessments.map(a=>`<option value="${a.id}">${a.name} · ${a.classroom_name} · ${a.subject_name}</option>`).join("");
+
+    renderAssessments();
+  }catch(err){
+    target.innerHTML=`<p class="muted-note">Could not load assessments: ${err.message}</p>`;
+  }
+}
+function renderAssessments(){
+  const target=q("#assessment-list");if(!target)return;
+  target.innerHTML=allAssessments.length?allAssessments.map(a=>`<article class="admin-application"><div><h3>${a.name}</h3><p>${a.classroom_name} · ${a.subject_name} · ${a.assessment_type} · ${a.date} · ${a.marked_count} marked${a.class_average!=null?" · Avg "+a.class_average:""}${a.published?" · Published":""}</p></div><div class="decision-actions"><button class="reject-button" data-delete-assessment="${a.id}">Delete</button></div></article>`).join(""):`<p class="muted-note">No assessments yet.</p>`;
+}
+wireAdminForm("#assessment-form","/examinations/assessments/",d=>({name:d.get("name"),subject:d.get("subject"),classroom:d.get("classroom"),term:d.get("term")||null,assessment_type:d.get("assessment_type"),max_score:d.get("max_score")||100,date:d.get("date"),published:d.get("published")==="on"}),"#assessment-form-error",loadResultsAdmin);
+wireAdminDeleteList("#assessment-list","deleteAssessment",id=>`/examinations/assessments/${id}/`,loadResultsAdmin,"Delete this assessment and all its marks?");
+
+q("#marks-load-form")?.addEventListener("submit",async e=>{
+  e.preventDefault();
+  const session=getAdminSession();if(!session)return;
+  const assessmentId=q("#marks-assessment-select").value;
+  if(!assessmentId)return;
+  const assessment=allAssessments.find(a=>String(a.id)===assessmentId);
+  const target=q("#marks-sheet");
+  target.innerHTML=`<p class="muted-note">Loading…</p>`;
+  try{
+    const [studentsRes,existingRes]=await Promise.all([
+      api("/auth/users/?role=student",{token:session.token}),
+      api(`/examinations/marks/?assessment=${assessmentId}`,{token:session.token}),
+    ]);
+    const roster=(studentsRes.results||studentsRes).filter(s=>String(s.classroom)===String(assessment.classroom));
+    const existing=existingRes.results||existingRes;
+    const existingByStudent={};
+    existing.forEach(m=>existingByStudent[m.student]=m);
+    if(!roster.length){target.innerHTML=`<p class="muted-note">No students are placed in ${assessment.classroom_name} yet.</p>`;return}
+    target.innerHTML=`<div class="attendance-rows">${roster.map(s=>{
+      const mark=existingByStudent[s.id];
+      const name=(s.first_name||s.last_name)?`${s.first_name} ${s.last_name}`.trim():s.username;
+      return `<div class="attendance-row" data-student="${s.id}"><span>${name} <small>${s.student_id||s.username}</small></span><input class="mark-score" type="number" min="0" max="${assessment.max_score}" step="0.5" placeholder="/ ${assessment.max_score}" value="${mark?mark.score:""}"><input class="mark-comments" placeholder="Comments (optional)" value="${mark?mark.comments:""}"></div>`;
+    }).join("")}</div><div class="attendance-actions"><button class="primary-button" id="save-marks" type="button">Save marks</button><p id="marks-form-error" class="form-error"></p></div><div id="marks-report"></div>`;
+    loadMarksReport(assessmentId);
+  }catch(err){
+    target.innerHTML=`<p class="muted-note">Could not load the mark sheet: ${err.message}</p>`;
+  }
+});
+
+q("#marks-sheet")?.addEventListener("click",async e=>{
+  if(e.target.id!=="save-marks")return;
+  const session=getAdminSession();if(!session)return;
+  const assessmentId=q("#marks-assessment-select").value;
+  const entries=qa(".attendance-row").map(row=>({
+    student:row.dataset.student,
+    score:row.querySelector(".mark-score").value,
+    comments:row.querySelector(".mark-comments").value,
+  })).filter(entry=>entry.score!=="");
+  e.target.disabled=true;
+  try{
+    const res=await api("/examinations/marks/bulk_mark/",{method:"POST",body:{assessment:assessmentId,entries},token:session.token});
+    q("#marks-form-error").textContent=res.errors&&res.errors.length?res.errors.join(" "):"";
+    alert(`Saved ${res.marked} mark${res.marked===1?"":"s"}.`);
+    await loadResultsAdmin();
+    loadMarksReport(assessmentId);
+  }catch(err){
+    q("#marks-form-error").textContent=err.message;
+  }finally{
+    e.target.disabled=false;
+  }
+});
+
+async function loadMarksReport(assessmentId){
+  const target=q("#marks-report");if(!target)return;
+  const session=getAdminSession();if(!session)return;
+  try{
+    const res=await api(`/examinations/assessments/${assessmentId}/report/`,{token:session.token});
+    target.innerHTML=`<h3 class="staff-category-head">Ranking <span>Class average: ${res.class_average!=null?res.class_average:"—"}</span></h3>`+
+      (res.rows.length?res.rows.map(r=>`<p><strong>#${r.rank} ${r.student_name}</strong><small>${r.score} (${r.percentage}%) · Grade ${r.letter_grade}</small></p>`).join(""):`<p class="muted-note">No marks recorded yet.</p>`);
+  }catch(err){
+    target.innerHTML=`<p class="muted-note">Could not load the report: ${err.message}</p>`;
+  }
+}
