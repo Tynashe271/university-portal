@@ -305,6 +305,7 @@ async function loadAdmin(){
     target.innerHTML=`<p class="muted-note">Could not load applications: ${err.message}</p>`;
   }
   loadAdminNews();
+  loadAdminStaff();
 }
 
 function renderAdminList(){
@@ -475,6 +476,81 @@ q("#admin-news-list")?.addEventListener("click",async e=>{
     await loadAdminNews();
   }catch(err){
     alert("Could not delete post: "+err.message);
+    e.target.disabled=false;
+  }
+});
+
+/* ---------- Staff & teachers admin ---------- */
+const STAFF_CATEGORIES=[
+  ["permanent_teacher","Permanent Teachers"],
+  ["student_teacher","Student Teachers"],
+  ["staff","Staff"],
+  ["sdc_member","SDC Members"],
+];
+let allStaff=[];
+const staffForm=q("#staff-form");
+
+async function loadAdminStaff(){
+  const target=q("#admin-staff-list");if(!target)return;
+  const session=getAdminSession();if(!session)return;
+  target.innerHTML=`<p class="muted-note">Loading…</p>`;
+  try{
+    const res=await api("/staff/staff-profiles/?page_size=500",{token:session.token});
+    allStaff=res.results||res;
+    renderAdminStaff();
+  }catch(err){
+    target.innerHTML=`<p class="muted-note">Could not load staff: ${err.message}</p>`;
+  }
+}
+
+function renderAdminStaff(){
+  const target=q("#admin-staff-list");if(!target)return;
+  target.innerHTML=STAFF_CATEGORIES.map(([key,label])=>{
+    const members=allStaff.filter(s=>s.employee_type===key);
+    const rows=members.length
+      ?members.map(s=>`<article class="admin-application"><div><h3>${s.display_name}</h3><p>${[s.designation,s.department,s.phone,s.email].filter(Boolean).join(" · ")||"No further details"}</p></div><div class="decision-actions"><button class="reject-button" data-delete-staff="${s.id}">Remove</button></div></article>`).join("")
+      :`<p class="muted-note">No ${label.toLowerCase()} yet.</p>`;
+    return `<div class="staff-category"><h3 class="staff-category-head">${label} <span>${members.length}</span></h3>${rows}</div>`;
+  }).join("");
+}
+
+if(staffForm)staffForm.onsubmit=async e=>{
+  e.preventDefault();
+  const session=getAdminSession();if(!session)return;
+  const d=new FormData(staffForm);
+  q("#staff-form-error").textContent="";
+  const payload={
+    full_name:d.get("full_name"),
+    employee_type:d.get("employee_type"),
+    designation:d.get("designation")||"",
+    department:d.get("department")||"",
+    phone:d.get("phone")||"",
+    email:d.get("email")||"",
+  };
+  const submitBtn=staffForm.querySelector('button[type="submit"]');
+  submitBtn.disabled=true;
+  try{
+    await api("/staff/staff-profiles/",{method:"POST",body:payload,token:session.token});
+    staffForm.reset();
+    await loadAdminStaff();
+  }catch(err){
+    q("#staff-form-error").textContent=err.message;
+  }finally{
+    submitBtn.disabled=false;
+  }
+};
+
+q("#admin-staff-list")?.addEventListener("click",async e=>{
+  const id=e.target.dataset.deleteStaff;
+  if(!id)return;
+  if(!confirm("Remove this staff member? This cannot be undone."))return;
+  const session=getAdminSession();if(!session)return;
+  e.target.disabled=true;
+  try{
+    await api(`/staff/staff-profiles/${id}/`,{method:"DELETE",token:session.token});
+    await loadAdminStaff();
+  }catch(err){
+    alert("Could not remove staff member: "+err.message);
     e.target.disabled=false;
   }
 });
