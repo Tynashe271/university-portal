@@ -4,6 +4,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 import uuid
 import re
+from .models import BehavioralIncident
 
 User = get_user_model()
 
@@ -113,8 +114,23 @@ class EmailVerificationSerializer(serializers.Serializer):
 
 class ResendVerificationSerializer(serializers.Serializer):
     email = serializers.EmailField()
-    
+
     def validate_email(self, value):
         if not User.objects.filter(email=value).exists():
             raise serializers.ValidationError("No user found with this email address.")
         return value
+
+
+class BehavioralIncidentSerializer(serializers.ModelSerializer):
+    student_name = serializers.SerializerMethodField()
+    reported_by_name = serializers.CharField(source='reported_by.username', read_only=True, default=None)
+
+    class Meta:
+        model = BehavioralIncident
+        fields = ['id', 'student', 'student_name', 'incident_type', 'description', 'severity',
+                  'incident_date', 'reported_by', 'reported_by_name', 'location', 'action_taken',
+                  'follow_up_required', 'follow_up_date', 'parent_notified']
+        read_only_fields = ['id', 'incident_date', 'reported_by']
+
+    def get_student_name(self, obj):
+        return f"{obj.student.first_name} {obj.student.last_name}".strip() or obj.student.username

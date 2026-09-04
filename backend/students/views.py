@@ -6,7 +6,9 @@ from django.contrib.auth import authenticate, login
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.conf import settings
-from .serializers import UserSerializer, UserRegistrationSerializer, UserLoginSerializer, UserProfileUpdateSerializer, EmailVerificationSerializer, ResendVerificationSerializer
+from .serializers import UserSerializer, UserRegistrationSerializer, UserLoginSerializer, UserProfileUpdateSerializer, EmailVerificationSerializer, ResendVerificationSerializer, BehavioralIncidentSerializer
+from .models import BehavioralIncident
+from config.permissions import IsAdminUser
 
 User = get_user_model()
 
@@ -184,5 +186,32 @@ def resend_verification(request):
             return Response({
                 'error': 'User with this email not found'
             }, status=status.HTTP_404_NOT_FOUND)
-    
+
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class BehavioralIncidentListCreateView(generics.ListCreateAPIView):
+    """Discipline module — the model already existed, unwired to any API
+    (no serializer/view/url at all) until now."""
+    queryset = BehavioralIncident.objects.select_related('student', 'reported_by').all()
+    serializer_class = BehavioralIncidentSerializer
+    permission_classes = [IsAdminUser]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        student = self.request.query_params.get('student')
+        severity = self.request.query_params.get('severity')
+        if student:
+            queryset = queryset.filter(student=student)
+        if severity:
+            queryset = queryset.filter(severity=severity)
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(reported_by=self.request.user)
+
+
+class BehavioralIncidentDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = BehavioralIncident.objects.all()
+    serializer_class = BehavioralIncidentSerializer
+    permission_classes = [IsAdminUser]

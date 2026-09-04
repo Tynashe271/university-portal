@@ -294,11 +294,12 @@ if(adminLogin)adminLogin.onsubmit=async e=>{
     initAttendancePanel();
     loadFeesAdmin();
     loadResultsAdmin();
+    loadDisciplineAdmin();
   }catch(err){
     q("#admin-error").textContent=err.message;
   }
 };
-if(adminDash&&getAdminSession()){q("#admin-login").hidden=true;adminDash.hidden=false;loadAdmin();loadAdminOverview();loadAcademics();loadAdminStudents();loadTimetableAdmin();initAttendancePanel();loadFeesAdmin();loadResultsAdmin()}
+if(adminDash&&getAdminSession()){q("#admin-login").hidden=true;adminDash.hidden=false;loadAdmin();loadAdminOverview();loadAcademics();loadAdminStudents();loadTimetableAdmin();initAttendancePanel();loadFeesAdmin();loadResultsAdmin();loadDisciplineAdmin()}
 
 async function loadAdmin(){
   const target=q("#admin-applications");if(!target)return;
@@ -1069,3 +1070,30 @@ async function loadMarksReport(assessmentId){
     target.innerHTML=`<p class="muted-note">Could not load the report: ${err.message}</p>`;
   }
 }
+
+/* ---------- Discipline admin ---------- */
+let allIncidents=[];
+
+async function loadDisciplineAdmin(){
+  const target=q("#incident-list");if(!target)return;
+  const session=getAdminSession();if(!session)return;
+  try{
+    const [incRes,studentsRes]=await Promise.all([
+      api("/auth/discipline/",{token:session.token}),
+      api("/auth/users/?role=student",{token:session.token}),
+    ]);
+    allIncidents=incRes.results||incRes;
+    const students=studentsRes.results||studentsRes;
+    const studentSelect=q("#incident-student-select");
+    if(studentSelect)studentSelect.innerHTML=students.map(s=>`<option value="${s.id}">${(s.first_name||s.last_name)?`${s.first_name} ${s.last_name}`.trim():s.username} (${s.student_id||s.username})</option>`).join("")||`<option value="">No students yet</option>`;
+    renderIncidents();
+  }catch(err){
+    target.innerHTML=`<p class="muted-note">Could not load incidents: ${err.message}</p>`;
+  }
+}
+function renderIncidents(){
+  const target=q("#incident-list");if(!target)return;
+  target.innerHTML=allIncidents.length?allIncidents.map(i=>`<article class="admin-application"><div><span class="decision-status ${i.incident_type==="positive"?"accepted":i.severity==="high"?"rejected":"under-review"}">${i.incident_type==="positive"?"Positive":i.severity[0].toUpperCase()+i.severity.slice(1)}</span><h3>${i.student_name}</h3><p>${i.description}${i.location?" · "+i.location:""} · ${new Date(i.incident_date).toLocaleDateString()}${i.follow_up_required?" · Follow-up needed":""}${i.parent_notified?" · Parent notified":""}</p></div><div class="decision-actions"><button class="reject-button" data-delete-incident="${i.id}">Delete</button></div></article>`).join(""):`<p class="muted-note">No incidents logged yet.</p>`;
+}
+wireAdminForm("#incident-form","/auth/discipline/",d=>({student:d.get("student"),incident_type:d.get("incident_type"),severity:d.get("severity"),location:d.get("location")||"",description:d.get("description"),action_taken:d.get("action_taken")||"",follow_up_required:d.get("follow_up_required")==="on",follow_up_date:d.get("follow_up_date")||null,parent_notified:d.get("parent_notified")==="on"}),"#incident-form-error",loadDisciplineAdmin);
+wireAdminDeleteList("#incident-list","deleteIncident",id=>`/auth/discipline/${id}/`,loadDisciplineAdmin,"Delete this incident record?");
