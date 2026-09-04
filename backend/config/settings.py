@@ -164,6 +164,11 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+# Media files (uploaded admission documents, photos, etc.)
+# https://docs.djangoproject.com/en/6.0/topics/files/
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
 # REST Framework settings
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [

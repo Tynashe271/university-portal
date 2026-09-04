@@ -14,6 +14,8 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path, include
 from django.http import JsonResponse
@@ -89,3 +91,8 @@ urlpatterns = [
     path('api/wellbeing/', include('wellbeing.urls')),
     path('api/staff/', include('staff.urls')),
 ]
+
+if settings.DEBUG:
+    # Serve uploaded admission documents/photos from the dev server so the
+    # admissions staff portal can open them directly.
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
