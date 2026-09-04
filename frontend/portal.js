@@ -42,6 +42,21 @@ async function api(path,{method="GET",body,token}={}){
   }
   return data;
 }
+// Like api(), but sends a FormData body (multipart) instead of JSON —
+// needed for endpoints that accept file uploads, such as the admission
+// application's document fields.
+async function apiUpload(path,formData,{method="POST",token}={}){
+  const headers={};
+  if(token)headers["Authorization"]=`Token ${token}`;
+  let res;
+  try{res=await fetch(API_BASE+path,{method,headers,body:formData})}
+  catch{throw new Error(`Could not reach the school server at ${API_BASE}. Is it running?`)}
+  let data=null;try{data=await res.json()}catch{}
+  if(!res.ok){
+    throw new Error(apiErrorMessage(data,res.status));
+  }
+  return data;
+}
 function saveJSON(k,v){localStorage.setItem(k,JSON.stringify(v))}
 function loadJSON(k){try{return JSON.parse(localStorage.getItem(k))}catch{return null}}
 
@@ -86,7 +101,7 @@ if(appForm){
       d.paymentMethod&&`Payment method: ${d.paymentMethod}`,
       d.paymentReference&&`Payment reference: ${d.paymentReference}`,
     ].filter(Boolean).join(" · ");
-    const payload={
+    const fields={
       student_name:`${d.firstName} ${d.lastName}`.trim(),
       date_of_birth:d.dob,
       gender:GENDER_MAP[d.gender]||"O",
@@ -102,11 +117,19 @@ if(appForm){
       additional_notes:notes,
       portal_password:d.portalPassword,
     };
+    // Sent as multipart/form-data (not JSON) so the uploaded documents
+    // reach the backend — admissions staff review these before deciding.
+    const fd=new FormData();
+    Object.entries(fields).forEach(([k,v])=>fd.append(k,v));
+    if(d.birthCertificate&&d.birthCertificate.size)fd.append("birth_certificate",d.birthCertificate);
+    if(d.schoolReport&&d.schoolReport.size)fd.append("transfer_certificate",d.schoolReport);
+    if(d.passportPhoto&&d.passportPhoto.size)fd.append("photo",d.passportPhoto);
+    if(d.supportingDocument&&d.supportingDocument.size)fd.append("aadhar_card",d.supportingDocument);
     const submitBtn=q("#submit-application");
     submitBtn.disabled=true;
     q("#save-note").textContent="Submitting application…";
     try{
-      const application=await api("/admissions/applications/",{method:"POST",body:payload});
+      const application=await apiUpload("/admissions/applications/",fd);
       localStorage.removeItem(draftKey);
       appForm.hidden=true;q(".form-heading").hidden=true;
       q("#application-complete").hidden=false;
@@ -292,22 +315,77 @@ function renderAdminList(){
   q("#admin-review").textContent=allApplications.filter(a=>["submitted","under_review"].includes(a.status)).length;
   q("#admin-accepted").textContent=allApplications.filter(a=>["approved","admitted","enrolled"].includes(a.status)).length;
   q("#admin-rejected").textContent=allApplications.filter(a=>a.status==="rejected").length;
-  target.innerHTML=entries.length?entries.map(a=>`<article class="admin-application"><div><span class="decision-status ${statusClass(a.status)}">${STATUS_LABELS[a.status]||a.status}</span><h3>${a.student_name}</h3><p>${a.application_number} · ${GRADE_LABELS[a.grade_applying_for]||a.grade_applying_for} · ${a.academic_year}</p></div><div class="decision-actions"><button class="accept-button" data-decision="approve" data-ref="${a.application_number}">Accept</button><button class="reject-button" data-decision="reject" data-ref="${a.application_number}">Reject</button></div></article>`).join(""):`<div class="empty-state small-empty"><h2>No applications found</h2><p>Submit an application first or change your search.</p></div>`;
+  target.innerHTML=entries.length?entries.map(a=>`<article class="admin-application"><div><span class="decision-status ${statusClass(a.status)}">${STATUS_LABELS[a.status]||a.status}</span><h3>${a.student_name}</h3><p>${a.application_number} · ${GRADE_LABELS[a.grade_applying_for]||a.grade_applying_for} · ${a.academic_year}</p></div><div class="decision-actions"><button class="primary-button" data-review="${a.application_number}">Review application</button></div></article>`).join(""):`<div class="empty-state small-empty"><h2>No applications found</h2><p>Submit an application first or change your search.</p></div>`;
 }
 
-q("#admin-applications")?.addEventListener("click",async e=>{
-  const decision=e.target.dataset.decision,ref=e.target.dataset.ref;
-  if(!decision||!ref)return;
+q("#admin-applications")?.addEventListener("click",e=>{
+  const ref=e.target.dataset.review;
+  if(ref)openReview(ref);
+});
+
+/* ---------- Document review modal ---------- */
+const GENDER_LABELS={M:"Male",F:"Female",O:"Other"};
+let reviewingRef=null;
+
+function openReview(ref){
+  const a=allApplications.find(x=>x.application_number===ref);
+  if(!a)return;
+  reviewingRef=ref;
+  const avatar=q("#review-avatar");
+  const nameParts=(a.student_name||"?").trim().split(/\s+/);
+  avatar.innerHTML=a.photo?`<img src="${a.photo}" alt="">`:((nameParts[0]?.[0]||"?")+(nameParts[1]?.[0]||"")).toUpperCase();
+  q("#review-status").textContent=STATUS_LABELS[a.status]||a.status;
+  q("#review-status").className=`decision-status ${statusClass(a.status)}`;
+  q("#review-name").textContent=a.student_name;
+  q("#review-meta").textContent=`${a.application_number} · ${GRADE_LABELS[a.grade_applying_for]||a.grade_applying_for} · ${a.academic_year}`;
+  const rows=[
+    ["Date of birth",a.date_of_birth?new Date(a.date_of_birth).toLocaleDateString():"—"],
+    ["Gender",GENDER_LABELS[a.gender]||a.gender],
+    ["Previous school",a.previous_school||"—"],
+    ["Previous grade",a.previous_grade||"—"],
+    ["Parent / guardian",a.parent_name],
+    ["Parent email",a.parent_email],
+    ["Parent phone",a.parent_phone],
+    ["Address",a.parent_address||"—"],
+  ];
+  if(a.additional_notes)rows.push(["Notes",a.additional_notes]);
+  q("#review-details-grid").innerHTML=rows.map(([label,val])=>`<p><span>${label}</span><strong>${val}</strong></p>`).join("");
+  const docs=[
+    ["Passport photo",a.photo],
+    ["Birth certificate",a.birth_certificate],
+    ["School report / transfer certificate",a.transfer_certificate],
+    ["Supporting document",a.aadhar_card],
+  ];
+  q("#review-doc-grid").innerHTML=docs.map(([label,url])=>url
+    ?`<a class="doc-item" href="${url}" target="_blank" rel="noopener"><span>📄</span><div><strong>${label}</strong><small>View document →</small></div></a>`
+    :`<div class="doc-item missing"><span>—</span><div><strong>${label}</strong><small>Not uploaded</small></div></div>`
+  ).join("");
+  const decided=["approved","rejected","admitted","enrolled"].includes(a.status);
+  q("#review-accept").hidden=decided;
+  q("#review-reject").hidden=decided;
+  q("#doc-review-modal").hidden=false;
+}
+function closeReview(){q("#doc-review-modal").hidden=true;reviewingRef=null}
+q("#review-close")?.addEventListener("click",closeReview);
+q("#doc-review-modal")?.addEventListener("click",e=>{if(e.target.id==="doc-review-modal")closeReview()});
+
+async function decideReview(decision){
+  if(!reviewingRef)return;
   const session=getAdminSession();if(!session)return;
-  e.target.disabled=true;
+  const btn=decision==="approve"?q("#review-accept"):q("#review-reject");
+  btn.disabled=true;
   try{
-    await api(`/admissions/applications/${encodeURIComponent(ref)}/${decision}/`,{method:"POST",token:session.token});
+    await api(`/admissions/applications/${encodeURIComponent(reviewingRef)}/${decision}/`,{method:"POST",token:session.token});
+    closeReview();
     await loadAdmin();
   }catch(err){
     alert("Could not update application: "+err.message);
-    e.target.disabled=false;
+  }finally{
+    btn.disabled=false;
   }
-});
+}
+q("#review-accept")?.addEventListener("click",()=>decideReview("approve"));
+q("#review-reject")?.addEventListener("click",()=>decideReview("reject"));
 q("#admin-logout")?.addEventListener("click",()=>{sessionStorage.removeItem(adminSessionStorageKey);location.reload()});
 q("#admin-search")?.addEventListener("input",renderAdminList);
 
