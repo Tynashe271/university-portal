@@ -4,11 +4,15 @@ from .models import AdmissionApplication, MeritList
 
 class AdmissionApplicationSerializer(serializers.ModelSerializer):
     portal_password = serializers.CharField(write_only=True, required=True, min_length=4)
+    has_student_account = serializers.SerializerMethodField()
 
     class Meta:
         model = AdmissionApplication
         fields = '__all__'
         read_only_fields = ['application_number', 'created_at', 'updated_at']
+
+    def get_has_student_account(self, obj):
+        return hasattr(obj, 'student_account') and obj.student_account is not None
 
     def create(self, validated_data):
         raw_password = validated_data.pop('portal_password')
