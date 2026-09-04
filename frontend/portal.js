@@ -2,6 +2,33 @@ const q=(s,c=document)=>c.querySelector(s),qa=(s,c=document)=>[...c.querySelecto
 const API_BASE="http://localhost:8000/api";
 const draftKey="anyschool-application-draft",sessionKey="anyschool-student-session";
 
+function apiErrorMessage(data,status){
+  if(!data)return `Request failed (${status})`;
+  // The backend's custom exception handler wraps DRF exceptions (validation
+  // errors, permission/auth errors, 404s, ...) as {error:true, message, details}
+  // where `message` is a generic per-status string and the real detail lives
+  // in `details` (either {"detail":"..."} or {"<field>":["..."]}).
+  if(data.error===true||typeof data.details!=="undefined"){
+    const details=data.details;
+    if(details&&typeof details==="object"){
+      if(typeof details.detail==="string")return details.detail;
+      const field=Object.keys(details)[0];
+      if(field){
+        const val=Array.isArray(details[field])?details[field][0]:details[field];
+        return field==="non_field_errors"?val:`${field}: ${val}`;
+      }
+    }
+    if(typeof details==="string")return details;
+    if(typeof data.message==="string")return data.message;
+  }
+  // Hand-written view responses use plain shapes like {error:"..."} or {detail:"..."}
+  if(typeof data.error==="string")return data.error;
+  if(typeof data.detail==="string")return data.detail;
+  if(typeof data.message==="string")return data.message;
+  const first=Object.values(data).flat()[0];
+  return typeof first==="string"?first:`Request failed (${status})`;
+}
+
 async function api(path,{method="GET",body,token}={}){
   const headers={};
   if(body)headers["Content-Type"]="application/json";
@@ -11,8 +38,7 @@ async function api(path,{method="GET",body,token}={}){
   catch{throw new Error(`Could not reach the school server at ${API_BASE}. Is it running?`)}
   let data=null;try{data=await res.json()}catch{}
   if(!res.ok){
-    const msg=data&&(data.error||data.detail||Object.values(data).flat()[0]);
-    throw new Error(Array.isArray(msg)?msg[0]:(msg||`Request failed (${res.status})`));
+    throw new Error(apiErrorMessage(data,res.status));
   }
   return data;
 }
