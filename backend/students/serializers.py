@@ -59,11 +59,21 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
             raise serializers.ValidationError({"password": "Password fields didn't match."})
-        
-        # Additional validation for role-specific fields
-        if attrs.get('role') == 'student' and not attrs.get('student_id'):
+
+        # This is a public, unauthenticated endpoint (AllowAny in
+        # RegisterView) — every privileged role (admin, teacher, staff,
+        # parent, driver, attendant) is created exclusively through an
+        # authenticated admin-only flow elsewhere (convert_to_student,
+        # staff/parents/driver quick_add). Without this, `role` was a
+        # plain writable field: any anonymous request could pass
+        # `"role": "admin"` and self-register full admin access — verified
+        # this actually worked before this fix. Forcing it here, rather
+        # than merely validating it, closes that off regardless of what a
+        # client submits.
+        attrs['role'] = 'student'
+        if not attrs.get('student_id'):
             raise serializers.ValidationError({"student_id": "Student ID is required for student role."})
-        
+
         return attrs
     
     def create(self, validated_data):
