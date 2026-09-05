@@ -62,11 +62,37 @@ meta tag instead.
 free Postgres database expires 30 days after creation and has to be
 recreated to keep going for free; the free web service spins down after 15
 minutes idle (the first request after that takes ~30-50s to wake it back
-up); and anything written to the backend's local disk — uploaded admission
-documents/photos in `MEDIA_ROOT` — is lost on every redeploy, since the
-free tier has no persistent disk. That last one needs real object storage
-(e.g. `django-storages` + an S3-compatible bucket) before uploads can be
-trusted to survive; it isn't wired up here.
+up); and the free web service only has 512MB RAM and a small ephemeral
+disk, so by default (see below) uploaded admission documents/photos in
+`MEDIA_ROOT` are lost on every redeploy and can fail to save if the disk
+fills up — this is the most common cause of "upload failed" reports from
+real applicants.
+
+**Fixing uploads for real: point them at object storage.** `django-storages`
+is already wired up (`backend/config/settings.py`) — set these on the
+backend service (Render dashboard → the service → Environment; the
+blueprint above already declares them, just empty) and it switches from
+local disk to an S3-compatible bucket, with no code changes needed:
+
+- `AWS_STORAGE_BUCKET_NAME`
+- `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`
+- `AWS_S3_ENDPOINT_URL` — omit for real AWS S3; for an S3-compatible
+  provider set it to that provider's endpoint
+
+A free [Cloudflare R2](https://developers.cloudflare.com/r2/) bucket
+(10 GB storage, no egress fees) works well here:
+1. Cloudflare dashboard → R2 → **Create bucket**.
+2. R2 → **Manage API tokens** → create a token with read/write access to
+   that bucket → note the Access Key ID, Secret Access Key, and the
+   account-specific endpoint it gives you
+   (`https://<account-id>.r2.cloudflarestorage.com`).
+3. Set the four env vars above on the Render backend service with those
+   values and redeploy.
+
+The bucket is kept private — uploaded certificates/documents are personal,
+so the app serves them via time-limited signed URLs rather than public
+links (see `AWS_QUERYSTRING_*` in `settings.py`) — and unset, everything
+falls back to local disk exactly as before, so this is opt-in.
 
 Everything the backend needs from the environment (`SECRET_KEY`, `DEBUG`,
 `ALLOWED_HOSTS`, `DATABASE_URL`, `CORS_EXTRA_ORIGINS`) is read in

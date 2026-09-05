@@ -13,3 +13,5 @@ xhtml2pdf==0.2.18
 gunicorn==23.0.0
 dj-database-url==2.3.0
 whitenoise==6.8.2
+django-storages==1.14.6
+boto3==1.43.89

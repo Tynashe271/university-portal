@@ -1,3 +1,10 @@
+# Manual smoke test — not part of the automated suite (`manage.py test`
+# only discovers real Django TestCases under each app's tests.py/tests/).
+# This hits a *running* server directly over HTTP, so it needs:
+#   1. `pip install requests` (deliberately not in requirements.txt —
+#      nothing in the app itself imports it)
+#   2. the backend running separately: `python manage.py runserver 8001`
+# then: `python scripts/manual_api_smoke_test.py`
 import requests
 
 BASE_URL = "http://localhost:8001/api"
