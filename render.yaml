@@ -32,15 +32,15 @@ services:
       - key: DEBUG
         value: "false"
       - key: ALLOWED_HOSTS
-        value: anyschool-backend.onrender.com
+        value: anyschool-backend-0hbm.onrender.com
       - key: CORS_EXTRA_ORIGINS
-        value: https://anyschool-frontend.onrender.com
+        value: https://anyschool-frontend-6c22.onrender.com
       - key: DATABASE_URL
         fromDatabase:
           name: anyschool-db
           property: connectionString
       - key: FRONTEND_URL
-        value: https://anyschool-frontend.onrender.com
+        value: https://anyschool-frontend-6c22.onrender.com
 
   - name: anyschool-frontend
     type: web

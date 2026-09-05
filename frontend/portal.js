@@ -10,7 +10,7 @@ const API_BASE=(()=>{
   const metaOverride=document.querySelector('meta[name="api-base"]')?.content;
   const host=location.hostname;
   if(metaOverride&&metaOverride!=="http://localhost:8000/api")return metaOverride;
-  if(host==="anyschool-frontend.onrender.com")return "https://anyschool-backend.onrender.com/api";
+  if(host==="anyschool-frontend-6c22.onrender.com")return "https://anyschool-backend-0hbm.onrender.com/api";
   if(host==="localhost"||host==="127.0.0.1")return "http://localhost:8000/api";
   return `${location.protocol}//${host}:8000/api`;
 })();
