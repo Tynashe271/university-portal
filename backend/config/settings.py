@@ -79,6 +79,9 @@ INSTALLED_APPS = [
     'examinations',
     'wellbeing',
     'staff',
+    'hostel',
+    'clubs',
+    'school_calendar',
 ]
 
 MIDDLEWARE = [
@@ -241,8 +244,10 @@ CACHE_MIDDLEWARE_ALIAS = 'default'
 CACHE_MIDDLEWARE_SECONDS = 600
 CACHE_MIDDLEWARE_KEY_PREFIX = 'university_portal'
 
-# Pagination settings
-REST_FRAMEWORK['DEFAULT_PAGINATION_CLASS'] = 'rest_framework.pagination.PageNumberPagination'
+# Pagination settings — config.pagination.StandardPagination actually
+# honors the `page_size` query param (see its docstring); the stock
+# PageNumberPagination silently ignores it and always returns 20.
+REST_FRAMEWORK['DEFAULT_PAGINATION_CLASS'] = 'config.pagination.StandardPagination'
 REST_FRAMEWORK['PAGE_SIZE'] = 20
 REST_FRAMEWORK['MAX_PAGE_SIZE'] = 100
 

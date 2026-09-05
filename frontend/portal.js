@@ -304,11 +304,14 @@ if(adminLogin)adminLogin.onsubmit=async e=>{
     loadAuditLogsAdmin();
     loadReportsAdmin();
     loadSettingsAdmin();
+    loadHostelAdmin();
+    loadClubsAdmin();
+    loadCalendarAdmin();
   }catch(err){
     q("#admin-error").textContent=err.message;
   }
 };
-if(adminDash&&getAdminSession()){q("#admin-login").hidden=true;adminDash.hidden=false;loadAdmin();loadAdminOverview();loadAcademics();loadAdminStudents();loadTimetableAdmin();initAttendancePanel();loadFeesAdmin();loadResultsAdmin();loadDisciplineAdmin();loadParentsAdmin();loadCommunicationAdmin();loadLibraryAdmin();loadTransportAdmin();loadInventoryAdmin();loadUsersAdmin();loadAuditLogsAdmin();loadReportsAdmin();loadSettingsAdmin()}
+if(adminDash&&getAdminSession()){q("#admin-login").hidden=true;adminDash.hidden=false;loadAdmin();loadAdminOverview();loadAcademics();loadAdminStudents();loadTimetableAdmin();initAttendancePanel();loadFeesAdmin();loadResultsAdmin();loadDisciplineAdmin();loadParentsAdmin();loadCommunicationAdmin();loadLibraryAdmin();loadTransportAdmin();loadInventoryAdmin();loadUsersAdmin();loadAuditLogsAdmin();loadReportsAdmin();loadSettingsAdmin();loadHostelAdmin();loadClubsAdmin();loadCalendarAdmin()}
 
 async function loadAdmin(){
   const target=q("#admin-applications");if(!target)return;
@@ -678,6 +681,22 @@ function wireAdminForm(formSelector,endpoint,payloadFn,errorSelector,onSuccess){
       submitBtn.disabled=false;
     }
   };
+}
+function wireAdminAction(listSelector,dataKey,endpointFn,onSuccess,confirmText){
+  q(listSelector)?.addEventListener("click",async e=>{
+    const id=e.target.dataset[dataKey];
+    if(!id)return;
+    if(confirmText&&!confirm(confirmText))return;
+    const session=getAdminSession();if(!session)return;
+    e.target.disabled=true;
+    try{
+      await api(endpointFn(id),{method:"POST",token:session.token});
+      await onSuccess();
+    }catch(err){
+      alert("Could not do that: "+err.message);
+      e.target.disabled=false;
+    }
+  });
 }
 function wireAdminDeleteList(listSelector,dataKey,endpointFn,onSuccess,confirmText){
   q(listSelector)?.addEventListener("click",async e=>{
@@ -1425,3 +1444,216 @@ if(q("#settings-form"))q("#settings-form").onsubmit=async e=>{
     submitBtn.disabled=false;
   }
 };
+
+/* ---------- Hostel & boarding admin ---------- */
+let allHostels=[],allHostelRooms=[],allHostelBeds=[],allBoardingAllocations=[],allHostelLeaveRequests=[],allHostelVisitors=[];
+const studentOptionHtml=s=>`<option value="${s.id}">${(s.first_name||s.last_name)?`${s.first_name} ${s.last_name}`.trim():s.username} (${s.student_id||s.username})</option>`;
+
+async function loadHostelAdmin(){
+  const target=q("#hostel-list");if(!target)return;
+  const session=getAdminSession();if(!session)return;
+  try{
+    const [hostelsRes,roomsRes,bedsRes,allocRes,leaveRes,visitorsRes,studentsRes]=await Promise.all([
+      api("/hostel/hostels/",{token:session.token}),
+      api("/hostel/rooms/?page_size=500",{token:session.token}),
+      api("/hostel/beds/?page_size=500",{token:session.token}),
+      api("/hostel/allocations/?page_size=500",{token:session.token}),
+      api("/hostel/leave-requests/",{token:session.token}),
+      api("/hostel/visitors/",{token:session.token}),
+      api("/auth/users/?role=student",{token:session.token}),
+    ]);
+    allHostels=hostelsRes.results||hostelsRes;
+    allHostelRooms=roomsRes.results||roomsRes;
+    allHostelBeds=bedsRes.results||bedsRes;
+    allBoardingAllocations=allocRes.results||allocRes;
+    allHostelLeaveRequests=leaveRes.results||leaveRes;
+    allHostelVisitors=visitorsRes.results||visitorsRes;
+    const students=studentsRes.results||studentsRes;
+
+    const hostelOptions=allHostels.map(h=>`<option value="${h.id}">${h.name}</option>`).join("")||`<option value="">Add a hostel first</option>`;
+    [q("#hostel-room-hostel-select"),q("#hostel-rollcall-hostel-select")].forEach(sel=>{if(sel)sel.innerHTML=hostelOptions});
+    const roomSelect=q("#hostel-bed-room-select");
+    if(roomSelect)roomSelect.innerHTML=allHostelRooms.map(r=>`<option value="${r.id}">${r.hostel_name} - Room ${r.room_number}</option>`).join("")||`<option value="">Add a room first</option>`;
+    const bedSelect=q("#hostel-allocation-bed-select");
+    if(bedSelect)bedSelect.innerHTML=allHostelBeds.filter(b=>b.status==="available").map(b=>`<option value="${b.id}">${b.hostel_name} - Room ${b.room_label} - Bed ${b.bed_number}</option>`).join("")||`<option value="">No available beds</option>`;
+    const studentOptions=students.map(studentOptionHtml).join("")||`<option value="">No students yet</option>`;
+    [q("#hostel-allocation-student-select"),q("#hostel-leave-student-select"),q("#hostel-visitor-student-select")].forEach(sel=>{if(sel)sel.innerHTML=studentOptions});
+    const dateInput=q("#hostel-rollcall-date");
+    if(dateInput&&!dateInput.value)dateInput.value=new Date().toISOString().slice(0,10);
+
+    renderHostels();renderHostelRooms();renderHostelBeds();renderHostelAllocations();renderHostelLeaveRequests();renderHostelVisitors();
+  }catch(err){
+    target.innerHTML=`<p class="muted-note">Could not load hostel data: ${err.message}</p>`;
+  }
+}
+function renderHostels(){
+  const target=q("#hostel-list");if(!target)return;
+  target.innerHTML=allHostels.length?allHostels.map(h=>`<article class="admin-application"><div><h3>${h.name}</h3><p>${h.hostel_type[0].toUpperCase()+h.hostel_type.slice(1)}${h.location?" · "+h.location:""} · ${h.room_count} room${h.room_count===1?"":"s"}${h.warden_name?" · Warden: "+h.warden_name:""}</p></div><div class="decision-actions"><button class="reject-button" data-delete-hostel="${h.id}">Delete</button></div></article>`).join(""):`<p class="muted-note">No hostels added yet.</p>`;
+}
+function renderHostelRooms(){
+  const target=q("#hostel-room-list");if(!target)return;
+  target.innerHTML=allHostelRooms.length?allHostelRooms.map(r=>`<article class="admin-application"><div><h3>${r.hostel_name} - Room ${r.room_number}</h3><p>${r.floor?"Floor "+r.floor+" · ":""}Capacity ${r.capacity} · ${r.bed_count} bed${r.bed_count===1?"":"s"} added</p></div><div class="decision-actions"><button class="reject-button" data-delete-hostelroom="${r.id}">Delete</button></div></article>`).join(""):`<p class="muted-note">No rooms added yet.</p>`;
+}
+function renderHostelBeds(){
+  const target=q("#hostel-bed-list");if(!target)return;
+  const STATUS_LABEL={available:"Available",occupied:"Occupied",maintenance:"Under maintenance"};
+  target.innerHTML=allHostelBeds.length?allHostelBeds.map(b=>`<article class="admin-application"><div><h3>${b.hostel_name} - Room ${b.room_label} - Bed ${b.bed_number}</h3><p><span class="decision-status ${b.status==="occupied"?"under-review":b.status==="maintenance"?"rejected":"accepted"}">${STATUS_LABEL[b.status]}</span></p></div><div class="decision-actions"><button class="reject-button" data-delete-hostelbed="${b.id}">Delete</button></div></article>`).join(""):`<p class="muted-note">No beds added yet.</p>`;
+}
+function renderHostelAllocations(){
+  const target=q("#hostel-allocation-list");if(!target)return;
+  target.innerHTML=allBoardingAllocations.length?allBoardingAllocations.map(a=>`<article class="admin-application"><div><h3>${a.student_name}</h3><p><span class="decision-status ${a.status==="active"?"accepted":"under-review"}">${a.status==="active"?"Active":"Vacated"}</span> ${a.hostel_name} - Room ${a.room_label} - Bed ${a.bed_label} · ${a.academic_year}</p></div><div class="decision-actions">${a.status==="active"?`<button class="secondary-button" data-vacate-allocation="${a.id}">Vacate</button>`:""}</div></article>`).join(""):`<p class="muted-note">No students allocated a bed yet.</p>`;
+}
+function renderHostelLeaveRequests(){
+  const target=q("#hostel-leave-list");if(!target)return;
+  target.innerHTML=allHostelLeaveRequests.length?allHostelLeaveRequests.map(l=>`<article class="admin-application"><div><h3>${l.student_name}</h3><p><span class="decision-status ${l.status==="approved"?"accepted":l.status==="rejected"?"rejected":"under-review"}">${l.status[0].toUpperCase()+l.status.slice(1)}</span> ${l.date_from} to ${l.date_to}${l.destination?" · "+l.destination:""} · ${l.reason}</p></div><div class="decision-actions">${l.status==="pending"?`<button class="accept-button" data-approve-leave="${l.id}">Approve</button><button class="reject-button" data-reject-leave="${l.id}">Reject</button>`:""}</div></article>`).join(""):`<p class="muted-note">No leave requests logged yet.</p>`;
+}
+function renderHostelVisitors(){
+  const target=q("#hostel-visitor-list");if(!target)return;
+  target.innerHTML=allHostelVisitors.length?allHostelVisitors.map(v=>`<article class="admin-application"><div><h3>${v.visitor_name}</h3><p>Visiting ${v.student_name}${v.relationship?" ("+v.relationship+")":""} · ${v.visit_date} · ${v.time_in}${v.time_out?" - "+v.time_out:""}${v.purpose?" · "+v.purpose:""}</p></div><div class="decision-actions"><button class="reject-button" data-delete-visitor="${v.id}">Delete</button></div></article>`).join(""):`<p class="muted-note">No visitors logged yet.</p>`;
+}
+wireAdminForm("#hostel-form","/hostel/hostels/",d=>({name:d.get("name"),hostel_type:d.get("hostel_type"),location:d.get("location")||""}),"#hostel-form-error",loadHostelAdmin);
+wireAdminForm("#hostel-room-form","/hostel/rooms/",d=>({hostel:d.get("hostel"),room_number:d.get("room_number"),floor:d.get("floor")||"",capacity:d.get("capacity")||4}),"#hostel-room-form-error",loadHostelAdmin);
+wireAdminForm("#hostel-bed-form","/hostel/beds/",d=>({room:d.get("room"),bed_number:d.get("bed_number")}),"#hostel-bed-form-error",loadHostelAdmin);
+wireAdminForm("#hostel-allocation-form","/hostel/allocations/",d=>({student:d.get("student"),bed:d.get("bed"),academic_year:d.get("academic_year")}),"#hostel-allocation-form-error",loadHostelAdmin);
+wireAdminForm("#hostel-leave-form","/hostel/leave-requests/",d=>({student:d.get("student"),date_from:d.get("date_from"),date_to:d.get("date_to"),destination:d.get("destination")||"",reason:d.get("reason")}),"#hostel-leave-form-error",loadHostelAdmin);
+wireAdminForm("#hostel-visitor-form","/hostel/visitors/",d=>({student:d.get("student"),visitor_name:d.get("visitor_name"),relationship:d.get("relationship")||"",visit_date:d.get("visit_date"),time_in:d.get("time_in")}),"#hostel-visitor-form-error",loadHostelAdmin);
+wireAdminDeleteList("#hostel-list","deleteHostel",id=>`/hostel/hostels/${id}/`,loadHostelAdmin,"Delete this hostel and all its rooms and beds?");
+wireAdminDeleteList("#hostel-room-list","deleteHostelroom",id=>`/hostel/rooms/${id}/`,loadHostelAdmin,"Delete this room and its beds?");
+wireAdminDeleteList("#hostel-bed-list","deleteHostelbed",id=>`/hostel/beds/${id}/`,loadHostelAdmin,"Delete this bed?");
+wireAdminDeleteList("#hostel-visitor-list","deleteVisitor",id=>`/hostel/visitors/${id}/`,loadHostelAdmin,"Delete this visitor record?");
+wireAdminAction("#hostel-allocation-list","vacateAllocation",id=>`/hostel/allocations/${id}/vacate/`,loadHostelAdmin,"Mark this student as having vacated their bed?");
+wireAdminAction("#hostel-leave-list","approveLeave",id=>`/hostel/leave-requests/${id}/approve/`,loadHostelAdmin);
+wireAdminAction("#hostel-leave-list","rejectLeave",id=>`/hostel/leave-requests/${id}/reject/`,loadHostelAdmin);
+
+q("#hostel-rollcall-load-form")?.addEventListener("submit",async e=>{
+  e.preventDefault();
+  const session=getAdminSession();if(!session)return;
+  const d=new FormData(e.currentTarget);
+  const hostelId=d.get("hostel"),date=d.get("date"),shift=d.get("session");
+  if(!hostelId||!date)return;
+  const target=q("#hostel-rollcall-register");
+  target.innerHTML=`<p class="muted-note">Loading…</p>`;
+  try{
+    const roster=allBoardingAllocations.filter(a=>a.status==="active"&&String(a.hostel_id)===String(hostelId));
+    const existingRes=await api(`/hostel/roll-calls/?hostel=${hostelId}&date=${date}`,{token:session.token});
+    const existing=(existingRes.results||existingRes).find(rc=>rc.session===shift);
+    const existingByStudent={};
+    (existing?existing.records:[]).forEach(r=>existingByStudent[r.student]=r);
+    if(!roster.length){target.innerHTML=`<p class="muted-note">No students are currently boarding in this hostel.</p>`;return}
+    target.innerHTML=`<div class="attendance-rows">${roster.map(a=>{
+      const mark=existingByStudent[a.student];
+      return `<div class="attendance-row" data-student="${a.student}"><span>${a.student_name} <small>Room ${a.room_label} - Bed ${a.bed_label}</small></span><select class="rollcall-present"><option value="true"${!mark||mark.present?" selected":""}>Present</option><option value="false"${mark&&!mark.present?" selected":""}>Absent</option></select><input class="rollcall-notes" placeholder="Notes (optional)" value="${mark?mark.notes:""}"></div>`;
+    }).join("")}</div><div class="attendance-actions"><button class="primary-button" id="save-rollcall" type="button">Save roll call</button><p id="hostel-rollcall-form-error" class="form-error"></p></div>`;
+  }catch(err){
+    target.innerHTML=`<p class="muted-note">Could not load the roll call: ${err.message}</p>`;
+  }
+});
+q("#hostel-rollcall-register")?.addEventListener("click",async e=>{
+  if(e.target.id!=="save-rollcall")return;
+  const session=getAdminSession();if(!session)return;
+  const form=q("#hostel-rollcall-load-form");
+  const d=new FormData(form);
+  const entries=qa(".attendance-row").map(row=>({
+    student:row.dataset.student,
+    present:row.querySelector(".rollcall-present").value==="true",
+    notes:row.querySelector(".rollcall-notes").value,
+  }));
+  e.target.disabled=true;
+  try{
+    await api("/hostel/roll-calls/bulk_mark/",{method:"POST",body:{hostel:d.get("hostel"),date:d.get("date"),session:d.get("session"),entries},token:session.token});
+    q("#hostel-rollcall-form-error").textContent="";
+    alert(`Roll call saved for ${entries.length} student${entries.length===1?"":"s"}.`);
+  }catch(err){
+    q("#hostel-rollcall-form-error").textContent=err.message;
+  }finally{
+    e.target.disabled=false;
+  }
+});
+
+/* ---------- Sports & clubs admin ---------- */
+let allClubs=[],allClubMemberships=[],allClubEvents=[],allClubAchievements=[];
+const EVENT_TYPE_LABELS={fixture:"Fixture/Match",competition:"Competition",meeting:"Meeting",other:"Other"};
+const CLUB_LEVEL_LABELS={school:"School",district:"District",provincial:"Provincial",national:"National",international:"International"};
+
+async function loadClubsAdmin(){
+  const target=q("#club-list");if(!target)return;
+  const session=getAdminSession();if(!session)return;
+  try{
+    const [clubsRes,membershipsRes,eventsRes,achievementsRes,staffRes,studentsRes]=await Promise.all([
+      api("/clubs/clubs/",{token:session.token}),
+      api("/clubs/memberships/?page_size=500",{token:session.token}),
+      api("/clubs/events/",{token:session.token}),
+      api("/clubs/achievements/",{token:session.token}),
+      api("/staff/staff-profiles/?page_size=500",{token:session.token}),
+      api("/auth/users/?role=student",{token:session.token}),
+    ]);
+    allClubs=clubsRes.results||clubsRes;
+    allClubMemberships=membershipsRes.results||membershipsRes;
+    allClubEvents=eventsRes.results||eventsRes;
+    allClubAchievements=achievementsRes.results||achievementsRes;
+    const staff=staffRes.results||staffRes;
+    const students=studentsRes.results||studentsRes;
+
+    const coachSelect=q("#club-coach-select");
+    if(coachSelect)coachSelect.innerHTML=`<option value="">— none —</option>`+staff.map(s=>`<option value="${s.id}">${s.display_name}</option>`).join("");
+    const clubOptions=allClubs.map(c=>`<option value="${c.id}">${c.name}</option>`).join("")||`<option value="">Add a club first</option>`;
+    [q("#club-membership-club-select"),q("#club-event-club-select")].forEach(sel=>{if(sel)sel.innerHTML=clubOptions});
+    const achievementClubSelect=q("#club-achievement-club-select");
+    if(achievementClubSelect)achievementClubSelect.innerHTML=`<option value="">— none —</option>`+allClubs.map(c=>`<option value="${c.id}">${c.name}</option>`).join("");
+    const studentOptions=students.map(studentOptionHtml).join("")||`<option value="">No students yet</option>`;
+    const membershipStudentSelect=q("#club-membership-student-select");
+    if(membershipStudentSelect)membershipStudentSelect.innerHTML=studentOptions;
+    const achievementStudentSelect=q("#club-achievement-student-select");
+    if(achievementStudentSelect)achievementStudentSelect.innerHTML=`<option value="">— none —</option>`+students.map(studentOptionHtml).join("");
+
+    renderClubs();renderClubMemberships();renderClubEvents();renderClubAchievements();
+  }catch(err){
+    target.innerHTML=`<p class="muted-note">Could not load clubs: ${err.message}</p>`;
+  }
+}
+function renderClubs(){
+  const target=q("#club-list");if(!target)return;
+  target.innerHTML=allClubs.length?allClubs.map(c=>`<article class="admin-application"><div><h3>${c.name}</h3><p>${c.category[0].toUpperCase()+c.category.slice(1)}${c.coach_name?" · Coach: "+c.coach_name:""}${c.meeting_day?" · "+c.meeting_day:""} · ${c.member_count} member${c.member_count===1?"":"s"}</p></div><div class="decision-actions"><button class="reject-button" data-delete-club="${c.id}">Delete</button></div></article>`).join(""):`<p class="muted-note">No clubs or teams added yet.</p>`;
+}
+function renderClubMemberships(){
+  const target=q("#club-membership-list");if(!target)return;
+  target.innerHTML=allClubMemberships.length?allClubMemberships.map(m=>`<article class="admin-application"><div><h3>${m.student_name}</h3><p>${m.club_name} · ${m.role.replace("_"," ")}</p></div><div class="decision-actions"><button class="reject-button" data-delete-clubmembership="${m.id}">Remove</button></div></article>`).join(""):`<p class="muted-note">No members added yet.</p>`;
+}
+function renderClubEvents(){
+  const target=q("#club-event-list");if(!target)return;
+  target.innerHTML=allClubEvents.length?allClubEvents.map(ev=>`<article class="admin-application"><div><h3>${ev.club_name} - ${ev.title}</h3><p>${EVENT_TYPE_LABELS[ev.event_type]||ev.event_type}${ev.venue?" · "+ev.venue:""} · ${new Date(ev.event_date).toLocaleString()}</p></div><div class="decision-actions"><button class="reject-button" data-delete-clubevent="${ev.id}">Delete</button></div></article>`).join(""):`<p class="muted-note">No fixtures or events added yet.</p>`;
+}
+function renderClubAchievements(){
+  const target=q("#club-achievement-list");if(!target)return;
+  target.innerHTML=allClubAchievements.length?allClubAchievements.map(a=>`<article class="admin-application"><div><h3>${a.title}</h3><p>${CLUB_LEVEL_LABELS[a.level]||a.level}${a.club_name?" · "+a.club_name:""}${a.student_name?" · "+a.student_name:""} · ${a.date_achieved}</p></div><div class="decision-actions"><button class="reject-button" data-delete-achievement="${a.id}">Delete</button></div></article>`).join(""):`<p class="muted-note">No achievements recorded yet.</p>`;
+}
+wireAdminForm("#club-form","/clubs/clubs/",d=>({name:d.get("name"),category:d.get("category"),coach:d.get("coach")||null,meeting_day:d.get("meeting_day")||"",description:d.get("description")||""}),"#club-form-error",loadClubsAdmin);
+wireAdminForm("#club-membership-form","/clubs/memberships/",d=>({club:d.get("club"),student:d.get("student"),role:d.get("role")}),"#club-membership-form-error",loadClubsAdmin);
+wireAdminForm("#club-event-form","/clubs/events/",d=>({club:d.get("club"),title:d.get("title"),event_type:d.get("event_type"),opponent:d.get("opponent")||"",venue:d.get("venue")||"",event_date:d.get("event_date")}),"#club-event-form-error",loadClubsAdmin);
+wireAdminForm("#club-achievement-form","/clubs/achievements/",d=>({club:d.get("club")||null,student:d.get("student")||null,title:d.get("title"),level:d.get("level"),date_achieved:d.get("date_achieved")}),"#club-achievement-form-error",loadClubsAdmin);
+wireAdminDeleteList("#club-list","deleteClub",id=>`/clubs/clubs/${id}/`,loadClubsAdmin,"Delete this club and all its membership/event/achievement records?");
+wireAdminDeleteList("#club-membership-list","deleteClubmembership",id=>`/clubs/memberships/${id}/`,loadClubsAdmin,"Remove this member?");
+wireAdminDeleteList("#club-event-list","deleteClubevent",id=>`/clubs/events/${id}/`,loadClubsAdmin,"Delete this event?");
+wireAdminDeleteList("#club-achievement-list","deleteAchievement",id=>`/clubs/achievements/${id}/`,loadClubsAdmin,"Delete this achievement?");
+
+/* ---------- School calendar admin ---------- */
+let allCalendarEvents=[];
+const CALENDAR_EVENT_LABELS={term:"Term",holiday:"Holiday",exam:"Examination",meeting:"Meeting",sports_day:"Sports day",trip:"Trip",deadline:"Deadline",assembly:"Assembly",other:"Other"};
+
+async function loadCalendarAdmin(){
+  const target=q("#calendar-event-list");if(!target)return;
+  const session=getAdminSession();if(!session)return;
+  try{
+    const res=await api("/calendar/events/?page_size=500",{token:session.token});
+    allCalendarEvents=res.results||res;
+    renderCalendarEvents();
+  }catch(err){
+    target.innerHTML=`<p class="muted-note">Could not load the calendar: ${err.message}</p>`;
+  }
+}
+function renderCalendarEvents(){
+  const target=q("#calendar-event-list");if(!target)return;
+  target.innerHTML=allCalendarEvents.length?allCalendarEvents.map(ev=>`<article class="admin-application"><div><h3>${ev.title}</h3><p>${CALENDAR_EVENT_LABELS[ev.event_type]||ev.event_type} · ${ev.start_date}${ev.end_date?" to "+ev.end_date:""}${ev.location?" · "+ev.location:""}${ev.is_public?"":" · Admin only"}</p></div><div class="decision-actions"><button class="reject-button" data-delete-calendarevent="${ev.id}">Delete</button></div></article>`).join(""):`<p class="muted-note">No calendar events added yet.</p>`;
+}
+wireAdminForm("#calendar-event-form","/calendar/events/",d=>({title:d.get("title"),event_type:d.get("event_type"),start_date:d.get("start_date"),end_date:d.get("end_date")||null,start_time:d.get("start_time")||null,end_time:d.get("end_time")||null,location:d.get("location")||"",description:d.get("description")||"",academic_year:d.get("academic_year")||"",is_public:d.get("is_public")==="on"}),"#calendar-event-form-error",loadCalendarAdmin);
+wireAdminDeleteList("#calendar-event-list","deleteCalendarevent",id=>`/calendar/events/${id}/`,loadCalendarAdmin,"Delete this calendar event?");

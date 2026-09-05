@@ -50,6 +50,9 @@ def api_root(request):
             'examinations': '/api/examinations/',
             'wellbeing': '/api/wellbeing/',
             'staff': '/api/staff/',
+            'hostel': '/api/hostel/',
+            'clubs': '/api/clubs/',
+            'calendar': '/api/calendar/',
             'admin_panel': '/admin/'
         },
         'documentation': 'See README.md for API documentation'
@@ -92,6 +95,9 @@ urlpatterns = [
     path('api/examinations/', include('examinations.urls')),
     path('api/wellbeing/', include('wellbeing.urls')),
     path('api/staff/', include('staff.urls')),
+    path('api/hostel/', include('hostel.urls')),
+    path('api/clubs/', include('clubs.urls')),
+    path('api/calendar/', include('school_calendar.urls')),
 ]
 
 if settings.DEBUG:
