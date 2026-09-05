@@ -188,15 +188,46 @@ STATIC_URL = 'static/'
 # serves them directly from gunicorn in production, no separate nginx
 # container required for a simple deployment.
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STORAGES = {
-    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
-    'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
-}
 
 # Media files (uploaded admission documents, photos, etc.)
 # https://docs.djangoproject.com/en/6.0/topics/files/
+#
+# Local disk is fine for dev, but on Render's free tier it's ephemeral (and
+# small) — uploaded certificates/documents can vanish on redeploy or fail to
+# save if the disk fills up. Setting AWS_STORAGE_BUCKET_NAME switches uploads
+# to an S3-compatible bucket instead (Cloudflare R2, Backblaze B2, or real
+# AWS S3 all work — see README.md#deploying-it-for-real for setup steps);
+# leaving it unset keeps the old local-disk behavior with zero config.
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME', '').strip()
+USE_S3_MEDIA = bool(AWS_STORAGE_BUCKET_NAME)
+
+if USE_S3_MEDIA:
+    AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID', '')
+    AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY', '')
+    # For real AWS S3 leave this unset; for an S3-compatible provider (e.g.
+    # Cloudflare R2, Backblaze B2) point it at that provider's endpoint.
+    AWS_S3_ENDPOINT_URL = os.environ.get('AWS_S3_ENDPOINT_URL', '').strip() or None
+    AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME', 'auto')
+    AWS_S3_ADDRESSING_STYLE = 'virtual'
+    AWS_S3_FILE_OVERWRITE = False
+    AWS_DEFAULT_ACL = None
+    # Admission documents/certificates are personal — keep the bucket
+    # private and serve time-limited signed URLs rather than public links.
+    AWS_QUERYSTRING_AUTH = True
+    AWS_QUERYSTRING_EXPIRE = 3600  # signed URLs are valid for 1 hour
+    AWS_S3_SIGNATURE_VERSION = 's3v4'
+
+STORAGES = {
+    'default': (
+        {'BACKEND': 'storages.backends.s3.S3Storage'}
+        if USE_S3_MEDIA
+        else {'BACKEND': 'django.core.files.storage.FileSystemStorage'}
+    ),
+    'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
+}
 
 # REST Framework settings
 REST_FRAMEWORK = {
@@ -319,40 +350,48 @@ LOGGING = {
             'style': '{',
         },
     },
+    # The rotating file handlers below (up to ~180 MB combined at full
+    # rotation) are only wired up in DEBUG/local dev. In production
+    # (Render's free tier) the disk is small and ephemeral anyway, so
+    # logging there sticks to stdout/stderr — which Render already
+    # captures and keeps in its own Logs tab — instead of filling up the
+    # container's disk alongside uploaded media.
     'handlers': {
         'console': {
             'level': 'INFO',
             'class': 'logging.StreamHandler',
             'formatter': 'detailed'
         },
-        'file': {
-            'level': 'INFO',
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': BASE_DIR / 'logs' / 'django.log',
-            'maxBytes': 1024 * 1024 * 10,  # 10 MB
-            'backupCount': 5,
-            'formatter': 'detailed',
-        },
-        'api_file': {
-            'level': 'INFO',
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': BASE_DIR / 'logs' / 'api.log',
-            'maxBytes': 1024 * 1024 * 10,  # 10 MB
-            'backupCount': 5,
-            'formatter': 'detailed',
-        },
-        'error_file': {
-            'level': 'ERROR',
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': BASE_DIR / 'logs' / 'error.log',
-            'maxBytes': 1024 * 1024 * 10,  # 10 MB
-            'backupCount': 5,
-            'formatter': 'detailed',
-        },
+        **({
+            'file': {
+                'level': 'INFO',
+                'class': 'logging.handlers.RotatingFileHandler',
+                'filename': BASE_DIR / 'logs' / 'django.log',
+                'maxBytes': 1024 * 1024 * 10,  # 10 MB
+                'backupCount': 5,
+                'formatter': 'detailed',
+            },
+            'api_file': {
+                'level': 'INFO',
+                'class': 'logging.handlers.RotatingFileHandler',
+                'filename': BASE_DIR / 'logs' / 'api.log',
+                'maxBytes': 1024 * 1024 * 10,  # 10 MB
+                'backupCount': 5,
+                'formatter': 'detailed',
+            },
+            'error_file': {
+                'level': 'ERROR',
+                'class': 'logging.handlers.RotatingFileHandler',
+                'filename': BASE_DIR / 'logs' / 'error.log',
+                'maxBytes': 1024 * 1024 * 10,  # 10 MB
+                'backupCount': 5,
+                'formatter': 'detailed',
+            },
+        } if DEBUG else {}),
     },
     'loggers': {
         'django': {
-            'handlers': ['console', 'file'],
+            'handlers': ['console', 'file'] if DEBUG else ['console'],
             'level': 'INFO',
             'propagate': False,
         },
@@ -362,12 +401,12 @@ LOGGING = {
             'propagate': False,
         },
         'api': {
-            'handlers': ['console', 'api_file'],
+            'handlers': ['console', 'api_file'] if DEBUG else ['console'],
             'level': 'INFO',
             'propagate': False,
         },
         'rest_framework': {
-            'handlers': ['console', 'api_file'],
+            'handlers': ['console', 'api_file'] if DEBUG else ['console'],
             'level': 'INFO',
             'propagate': False,
         },

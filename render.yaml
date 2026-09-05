@@ -7,9 +7,15 @@
 #    recreated (losing its data) to keep going for free;
 #  - the free web service spins down after 15 minutes idle (the first
 #    request after that takes ~30-50s to wake it back up);
-#  - anything written to the backend's local disk (uploaded admission
-#    documents/photos in MEDIA_ROOT) is lost on every redeploy — fine for
-#    trying the site out, not fine for real uploaded files long-term.
+#  - the free web service also only has 512MB RAM and a small ephemeral
+#    disk, so with the AWS_* vars below left unset, uploaded admission
+#    documents/photos land on that local disk and are lost on every
+#    redeploy (and can fail under memory/disk pressure). Setting them
+#    switches uploads to an S3-compatible bucket instead — see
+#    README.md#deploying-it-for-real for setup steps. They're left with no
+#    `value`/`generateValue` here (Render will prompt for them when you
+#    Apply this blueprint, or you can fill them in from the dashboard
+#    afterwards under the backend service's Environment tab).
 databases:
   - name: anyschool-db
     plan: free
@@ -41,6 +47,17 @@ services:
           property: connectionString
       - key: FRONTEND_URL
         value: https://anyschool-frontend-6c22.onrender.com
+      # Optional: point uploads at an S3-compatible bucket instead of the
+      # backend's own ephemeral disk (see caveats above). Leave all four
+      # unset to keep the default local-disk behavior.
+      - key: AWS_STORAGE_BUCKET_NAME
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_S3_ENDPOINT_URL
+        sync: false
 
   - name: anyschool-frontend
     type: web
