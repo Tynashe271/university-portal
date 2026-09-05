@@ -1,11 +1,11 @@
-# Render Blueprint — deploys the whole app (backend API, frontend static
-# site, and a Postgres database) from one file. In the Render dashboard:
+# Render Blueprint — deploys the whole app (backend API, frontend Laravel
+# app, and a Postgres database) from one file. In the Render dashboard:
 # New > Blueprint > connect this repo > Apply.
 #
 # Free tier caveats (see the deployment notes in README.md):
 #  - the free Postgres database expires 30 days after creation and must be
 #    recreated (losing its data) to keep going for free;
-#  - the free web service spins down after 15 minutes idle (the first
+#  - both free web services spin down after 15 minutes idle (the first
 #    request after that takes ~30-50s to wake it back up);
 #  - anything written to the backend's local disk (uploaded admission
 #    documents/photos in MEDIA_ROOT) is lost on every redeploy — fine for
@@ -44,7 +44,20 @@ services:
 
   - name: anyschool-frontend
     type: web
-    runtime: static
+    runtime: docker
+    plan: free
     rootDir: frontend
-    buildCommand: ""
-    staticPublishPath: .
+    dockerfilePath: ./Dockerfile
+    envVars:
+      # Left empty on purpose: Render's `generateValue` produces a bare
+      # base64 string, not the `base64:`-prefixed, exact-length value
+      # Laravel's cipher requires, so it can't generate this one safely.
+      # The Dockerfile generates a fresh one at container boot instead
+      # when this is unset — fine here since nothing in this app relies on
+      # sessions/cookies surviving a restart (Django owns all real auth).
+      - key: APP_KEY
+        sync: false
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"

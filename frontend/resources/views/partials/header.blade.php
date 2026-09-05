@@ -1,0 +1,5 @@
+<div class="notice-bar"><div class="container notice-inner"><p><strong>2027 applications are open.</strong> Start your application today.</p><div class="portal-quick-links"><a href="/applicant-portal">Applicant portal</a><a href="/student-portal">Student portal</a></div></div></div><header class="site-header"><div class="container nav-wrap"><a class="brand" href="/"><span class="crest">AH</span><span><strong>Anyschool</strong><small>High School</small></span></a><button class="menu-toggle" aria-expanded="false" aria-controls="primary-nav"><span></span><span></span><span></span><b class="sr-only">Menu</b></button><nav id="primary-nav">
+@foreach ([['about','About'],['academics','Academics'],['student-life','Student life'],['admissions','Admissions'],['news','News'],['contact','Contact']] as [$slug, $label])
+<a {!! $page === $slug ? 'aria-current="page"' : '' !!} href="/{{ $slug }}">{{ $label }}</a>
+@endforeach
+<a class="btn btn-small btn-gold" href="/application">Apply now</a></nav></div></header>
