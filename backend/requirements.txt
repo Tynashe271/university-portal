@@ -10,3 +10,6 @@ sentry-sdk==1.40.0
 python-dotenv==1.2.3
 Pillow==12.3.0
 xhtml2pdf==0.2.18
+gunicorn==23.0.0
+dj-database-url==2.3.0
+whitenoise==6.8.2

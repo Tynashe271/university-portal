@@ -369,12 +369,16 @@ Navigate to `http://localhost:8000/admin/` to access the Django admin interface.
 
 ## Security Considerations
 
-- Change the `SECRET_KEY` in production
-- Set `DEBUG = False` in production
-- Configure proper `ALLOWED_HOSTS`
-- Use environment variables for sensitive data
-- Implement rate limiting for API endpoints
-- Use HTTPS in production
+`SECRET_KEY`, `DEBUG`, `ALLOWED_HOSTS` and `CORS_EXTRA_ORIGINS` are all read
+from environment variables in `config/settings.py` (each falls back to a
+local-dev-friendly default when unset) — see [../render.yaml](../render.yaml)
+and [../README.md](../README.md#deploying-it-for-real) for the production
+values a real deployment sets for these. Still worth doing beyond that:
+
+- Implement rate limiting tuned for real traffic (the current
+  `DEFAULT_THROTTLE_RATES` are dev-friendly defaults)
+- Use HTTPS in production (Render terminates TLS for you automatically;
+  a self-hosted deployment needs its own certificate/reverse proxy)
 
 ## Future Enhancements
 

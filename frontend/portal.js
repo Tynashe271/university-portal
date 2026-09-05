@@ -1,5 +1,19 @@
 const q=(s,c=document)=>c.querySelector(s),qa=(s,c=document)=>[...c.querySelectorAll(s)];
-const API_BASE="http://localhost:8000/api";
+// Same static HTML/JS is served from every environment (local dev, a LAN
+// IP, the deployed site), so this can't be one hardcoded value baked into
+// the page. Resolution order: an explicit override in the page's
+// <meta name="api-base"> tag (if someone's hand-edited it away from the
+// localhost default) > the known Render backend when viewed from the
+// Render frontend > localhost for local dev > same-host:8000 as a
+// reasonable guess for anything else (e.g. a LAN IP).
+const API_BASE=(()=>{
+  const metaOverride=document.querySelector('meta[name="api-base"]')?.content;
+  const host=location.hostname;
+  if(metaOverride&&metaOverride!=="http://localhost:8000/api")return metaOverride;
+  if(host==="anyschool-frontend.onrender.com")return "https://anyschool-backend.onrender.com/api";
+  if(host==="localhost"||host==="127.0.0.1")return "http://localhost:8000/api";
+  return `${location.protocol}//${host}:8000/api`;
+})();
 const draftKey="anyschool-application-draft",sessionKey="anyschool-student-session";
 
 function apiErrorMessage(data,status){
