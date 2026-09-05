@@ -21,7 +21,7 @@ def send_application_confirmation_email(application):
     context = {
         'application': application,
         'grade_label': application.get_grade_applying_for_display(),
-        'portal_url': f"{settings.FRONTEND_URL}/applicant-portal.html",
+        'portal_url': f"{settings.FRONTEND_URL}/applicant-portal",
     }
     subject = f"Application received - {application.application_number}"
 
