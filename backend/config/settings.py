@@ -30,12 +30,19 @@ LOGS_DIR.mkdir(exist_ok=True)
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-zz@wl^vz&29xf!@qvc-f43)sge^qz*ry6jfkn=e4ik7q@7hpf^'
+# Falls back to the old hardcoded dev key only when SECRET_KEY isn't set —
+# every real deployment (see render.yaml) sets a generated one via env var.
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-zz@wl^vz&29xf!@qvc-f43)sge^qz*ry6jfkn=e4ik7q@7hpf^')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Stays True by default so local dev is unaffected; every real deployment
+# sets DEBUG=false explicitly via env var.
+DEBUG = os.environ.get('DEBUG', 'true').lower() == 'true'
 
-ALLOWED_HOSTS = ['*']
+# Comma-separated in production (e.g. "anyschool-backend.onrender.com");
+# '*' keeps local dev and quick tunnels working with zero config.
+_allowed_hosts_env = os.environ.get('ALLOWED_HOSTS', '').strip()
+ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts_env.split(',') if h.strip()] or ['*']
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
@@ -43,6 +50,10 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5500",
     "http://127.0.0.1:5500",
 ]
+# Extra origins for a deployed frontend (e.g. a Render static site), added
+# on top of the local-dev list above rather than replacing it.
+_cors_extra = os.environ.get('CORS_EXTRA_ORIGINS', '').strip()
+CORS_ALLOWED_ORIGINS += [o.strip() for o in _cors_extra.split(',') if o.strip()]
 
 
 # Application definition
@@ -86,6 +97,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -124,11 +136,16 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+# DATABASE_URL (set by render.yaml / docker-compose) switches this to
+# Postgres in any real deployment; with it unset, local dev keeps using
+# the sqlite file exactly as before.
+import dj_database_url
+
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.config(
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        conn_max_age=600,
+    )
 }
 
 
@@ -167,6 +184,14 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+# `collectstatic` gathers files here; WhiteNoise (added to MIDDLEWARE above)
+# serves them directly from gunicorn in production, no separate nginx
+# container required for a simple deployment.
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
+}
 
 # Media files (uploaded admission documents, photos, etc.)
 # https://docs.djangoproject.com/en/6.0/topics/files/

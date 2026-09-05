@@ -1,4 +1,14 @@
 const $=(s,c=document)=>c.querySelector(s), $$=(s,c=document)=>[...c.querySelectorAll(s)];
+// See the matching comment in portal.js — same static site served from
+// every environment, so the API host is resolved at runtime, not baked in.
+const API_BASE=(()=>{
+  const metaOverride=document.querySelector('meta[name="api-base"]')?.content;
+  const host=location.hostname;
+  if(metaOverride&&metaOverride!=="http://localhost:8000/api")return metaOverride;
+  if(host==="anyschool-frontend.onrender.com")return "https://anyschool-backend.onrender.com/api";
+  if(host==="localhost"||host==="127.0.0.1")return "http://localhost:8000/api";
+  return `${location.protocol}//${host}:8000/api`;
+})();
 const page=document.body.dataset.page||"home";
 const links=[["about","About"],["academics","Academics"],["student-life","Student life"],["admissions","Admissions"],["news","News"],["contact","Contact"]];
 const header=$("[data-site-header]");
@@ -27,7 +37,7 @@ if(newsGrid){
   const longDate=d=>d.toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"});
   const dayNum=d=>String(d.getDate()).padStart(2,"0");
   const monAbbr=d=>d.toLocaleDateString("en-GB",{month:"short"}).toUpperCase();
-  fetch("http://localhost:8000/api/news/posts/").then(r=>r.json()).then(data=>{
+  fetch(API_BASE+"/news/posts/").then(r=>r.json()).then(data=>{
     const posts=data.results||data;
     if(!posts.length){newsGrid.innerHTML=`<p class="placeholder-note">No news or events have been posted yet — check back soon.</p>`;return}
     const [featured,...rest]=posts;

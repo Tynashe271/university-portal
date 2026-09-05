@@ -1,0 +1,50 @@
+# Render Blueprint — deploys the whole app (backend API, frontend static
+# site, and a Postgres database) from one file. In the Render dashboard:
+# New > Blueprint > connect this repo > Apply.
+#
+# Free tier caveats (see the deployment notes in README.md):
+#  - the free Postgres database expires 30 days after creation and must be
+#    recreated (losing its data) to keep going for free;
+#  - the free web service spins down after 15 minutes idle (the first
+#    request after that takes ~30-50s to wake it back up);
+#  - anything written to the backend's local disk (uploaded admission
+#    documents/photos in MEDIA_ROOT) is lost on every redeploy — fine for
+#    trying the site out, not fine for real uploaded files long-term.
+databases:
+  - name: anyschool-db
+    plan: free
+    databaseName: anyschool
+    user: anyschool
+
+services:
+  - name: anyschool-backend
+    type: web
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput
+    startCommand: python manage.py migrate --noinput && gunicorn config.wsgi:application --log-file -
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.14.3
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "false"
+      - key: ALLOWED_HOSTS
+        value: anyschool-backend.onrender.com
+      - key: CORS_EXTRA_ORIGINS
+        value: https://anyschool-frontend.onrender.com
+      - key: DATABASE_URL
+        fromDatabase:
+          name: anyschool-db
+          property: connectionString
+      - key: FRONTEND_URL
+        value: https://anyschool-frontend.onrender.com
+
+  - name: anyschool-frontend
+    type: web
+    runtime: static
+    rootDir: frontend
+    buildCommand: ""
+    staticPublishPath: .
